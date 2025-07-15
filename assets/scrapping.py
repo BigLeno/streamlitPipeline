@@ -1,3 +1,4 @@
+import datetime
 import pandas as pd
 import csv
 from selenium import webdriver
@@ -110,6 +111,22 @@ def scrape_historical_data(driver, ticker_symbol, days=None, data_inicial=None, 
             if days is not None and data_inicial is None and len(dados) >= days:
                 break
         df = pd.DataFrame(dados, columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
+
+        # Garante que o dado do dia atual esteja presente
+        hoje = datetime.datetime.now().strftime('%b %d, %Y')
+        if not (df['Date'] == hoje).any():
+            stock = scrape_stock(driver, ticker_symbol)
+            nova_linha = {
+                "Date": hoje,
+                "Open": stock.get("open_value", ""),
+                "High": stock.get("regular_market_price", ""),
+                "Low": stock.get("regular_market_price", ""),
+                "Close*": stock.get("regular_market_price", ""),
+                "Adj Close**": stock.get("regular_market_price", ""),
+                "Volume": stock.get("volume", "")
+            }
+            df = pd.concat([pd.DataFrame([nova_linha]), df], ignore_index=True)
+
         df.to_csv(f"historical_{ticker_symbol}.csv", index=False)
         return df
     except Exception as e:
