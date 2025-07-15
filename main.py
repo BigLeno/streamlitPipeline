@@ -1,3 +1,4 @@
+
 """
 Projeto: Extração de dados de ativos financeiros do Yahoo Finance
 Autor: Seu Nome
@@ -6,15 +7,14 @@ Descrição: Script para monitorar e extrair dados de ativos do segmento finance
 """
 
 from assets.config_assets import ATIVOS
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.common import TimeoutException
 import csv
+import pandas as pd
+from assets.scrapping import scrape_stock, scrape_historical_data
 
 
 def scrape_stock(driver, ticker_symbol):
@@ -68,7 +68,57 @@ def scrape_stock(driver, ticker_symbol):
     return stock
 
 
+def scrape_historical_data(driver, ticker_symbol, days=30):
+    """Extrai dados históricos do Yahoo Finance para o ticker informado."""
+    url = f'https://finance.yahoo.com/quote/{ticker_symbol}/history'
+    driver.get(url)
+    driver.implicitly_wait(10)
+    rows = driver.find_elements(By.XPATH, '//table[contains(@data-test,"historical-prices")]/tbody/tr')
+    dados = []
+    for row in rows:
+        cols = row.find_elements(By.TAG_NAME, 'td')
+        if len(cols) >= 6:
+            dados.append([col.text for col in cols])
+        if len(dados) >= days:
+            break
+    df = pd.DataFrame(dados, columns=['Date', 'Open', 'High', 'Low', 'Close*', 'Adj Close**', 'Volume'])
+    df.to_csv(f'historical_{ticker_symbol}.csv', index=False)
+    return df
+
+
 def main():
+    # print("Ativos monitorados:")
+    # for ativo in ATIVOS:
+    #     print(f"- {ativo}")
+    # print("\nBuscando dados dos ativos...")
+    # options = Options()
+    # options.add_argument('--headless=new')
+    # driver = webdriver.Chrome(
+    #     service=ChromeService(ChromeDriverManager().install()),
+    #     options=options
+    # )
+    # driver.set_window_size(1150, 1000)
+    # stocks = []
+    # for ticker_symbol in ATIVOS:
+    #     print(f"Buscando dados de {ticker_symbol}...")
+    #     stocks.append(scrape_stock(driver, ticker_symbol))
+    #     print(f"Buscando histórico de {ticker_symbol}...")
+    #     try:
+    #         scrape_historical_data(driver, ticker_symbol, days=30)
+    #         print(f"Histórico salvo em historical_{ticker_symbol}.csv")
+    #     except Exception as e:
+    #         print(f"[ERRO] Não foi possível extrair histórico de {ticker_symbol}: {e}")
+    # driver.quit()
+    # if stocks:
+    #     csv_header = stocks[0].keys()
+    #     with open('stocks.csv', 'w', newline='', encoding='utf-8') as output_file:
+    #         dict_writer = csv.DictWriter(output_file, csv_header)
+    #         dict_writer.writeheader()
+    #         dict_writer.writerows(stocks)
+    #     print("\nDados exportados para stocks.csv")
+    # else:
+    #     print("Nenhum dado coletado.")
+    # print(scrape_historical_data('BBDC4.SA'))  # Exemplo antigo comentado
     print("Ativos monitorados:")
     for ativo in ATIVOS:
         print(f"- {ativo}")
@@ -84,6 +134,12 @@ def main():
     for ticker_symbol in ATIVOS:
         print(f"Buscando dados de {ticker_symbol}...")
         stocks.append(scrape_stock(driver, ticker_symbol))
+        print(f"Buscando histórico de {ticker_symbol}...")
+        try:
+            print(scrape_historical_data(driver, ticker_symbol))
+            print(f"Histórico salvo em historical_{ticker_symbol}.csv")
+        except Exception as e:
+            print(f"[ERRO] Não foi possível extrair histórico de {ticker_symbol}: {e}")
     driver.quit()
     if stocks:
         csv_header = stocks[0].keys()
@@ -94,6 +150,7 @@ def main():
         print("\nDados exportados para stocks.csv")
     else:
         print("Nenhum dado coletado.")
+
 
 
 if __name__ == "__main__":
