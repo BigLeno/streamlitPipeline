@@ -76,30 +76,38 @@ def scrape_stock(driver, ticker_symbol):
     return stock
 
 
-def scrape_historical_data(driver, ticker_symbol, days=30):
-    """Extrai dados históricos do Yahoo Finance para o ticker informado."""
+def scrape_historical_data(driver, ticker_symbol, days=None, data_inicial=None, data_final=None):
+    """Extrai dados históricos do Yahoo Finance para o ticker informado.
+    days: número máximo de linhas (ignorado se datas forem passadas)
+    data_inicial/data_final: strings 'YYYY-MM-DD' para montar a URL com period1/period2
+    """
     import re
-    url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
+    import time
+    def date_to_unix(date_str):
+        return int(time.mktime(time.strptime(date_str, "%Y-%m-%d")))
+
+    if data_inicial and data_final:
+        period1 = date_to_unix(data_inicial)
+        period2 = date_to_unix(data_final)
+        url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history/?period1={period1}&period2={period2}"
+    else:
+        url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
+
     driver.get(url)
     try:
-        # Aguarda o HTML da página carregar
         WebDriverWait(driver, 40).until(
             EC.presence_of_element_located((By.TAG_NAME, 'body'))
         )
         html = driver.page_source
-        # Expressão regular para encontrar linhas da tabela de histórico
-        # Cada linha tem 7 colunas principais (Date, Open, High, Low, Close*, Adj Close**, Volume)
         padrao_linha = re.compile(r'<tr.*?>\s*(<td.*?>.*?</td>\s*){7,}.*?</tr>', re.DOTALL)
         padrao_coluna = re.compile(r'<td.*?>(.*?)</td>', re.DOTALL)
-        linhas = padrao_linha.findall(html)
         dados = []
         for match in re.finditer(padrao_linha, html):
             linha_html = match.group(0)
             colunas = padrao_coluna.findall(linha_html)
             if len(colunas) >= 7:
-                # Limpa tags e espaços
                 dados.append([re.sub('<.*?>', '', c).replace('\n', '').strip() for c in colunas[:7]])
-            if len(dados) >= days:
+            if days is not None and data_inicial is None and len(dados) >= days:
                 break
         df = pd.DataFrame(dados, columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
         df.to_csv(f"historical_{ticker_symbol}.csv", index=False)
