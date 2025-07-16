@@ -194,16 +194,20 @@ def preco_atual_html() -> str:
         cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
         variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
         variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
+        preco_str = f"{preco}" if preco is not None else "-"
         return f"""
-            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
-                <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
-                {preco if preco is not None else '-'}
-                </span>
-                <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
-                {variacao_str} {variacao_pct_str}
-                </span>
+            <div style='margin-bottom:0.5rem;'>
+                <div style='display:flex;align-items:center;gap:0.7rem;'>
+                    <span style='font-size:1.1rem;font-weight:500;color:#888;'>Preço do ativo agora:</span>
+                    <span style='font-size:2.1rem;font-weight:bold;color:#222;'>
+                        {preco_str}
+                    </span>
+                    <span style='font-size:1.2rem;font-weight:bold;color:{cor};margin-left:0.7rem;'>
+                        {variacao_str} {variacao_pct_str}
+                    </span>
+                </div>
+                <div style='font-size:0.9rem;color:#888;margin-top:0.2rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
             </div>
-            <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
         """
     return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
 
