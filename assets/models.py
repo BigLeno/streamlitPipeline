@@ -1,9 +1,21 @@
 
 
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, DateTime
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+# Tabela para preço atual
+class PrecoAtual(Base):
+    __tablename__ = 'precos_atualizados'
+    id = Column(Integer, primary_key=True)
+    ativo_id = Column(Integer, ForeignKey('ativos.id'))
+    preco = Column(Float, nullable=False)
+    variacao = Column(Float)
+    variacao_percentual = Column(Float)
+    atualizado_em = Column(DateTime)
+    ativo = relationship('Ativo')
 
 # Exemplo de tabela de ativos
 class Ativo(Base):

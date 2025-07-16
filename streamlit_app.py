@@ -8,8 +8,47 @@ from assets.analytics import (
 from assets.database import listar_ativos, listar_historicos, inserir_ativo
 import datetime
 from assets.scrapping import Scraper
+from assets.database import salvar_preco_atual, consultar_preco_atual, listar_ativos
+import threading
+import time
 
 st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
+
+# Thread para atualizar preços dos ativos periodicamente
+def atualizar_precos_periodicamente(intervalo=60):
+    def to_float(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            val = val.replace('%', '').replace(',', '').strip()
+        try:
+            return float(val)
+        except Exception:
+            return None
+    scraper = Scraper(headless=True)
+    while True:
+        ativos = listar_ativos()
+        for ativo in ativos:
+            try:
+                scraper.start_driver()
+                dados = scraper.scrape_stock(ativo.ticker)
+                scraper.quit_driver()
+                salvar_preco_atual(
+                    ativo.ticker,
+                    preco=to_float(dados.get("regular_market_price")),
+                    variacao=to_float(dados.get("regular_market_change")),
+                    variacao_percentual=to_float(dados.get("regular_market_change_percent")),
+                    atualizado_em=datetime.datetime.now()
+                )
+            except Exception as e:
+                pass
+        time.sleep(intervalo)
+
+# Inicia thread de atualização (apenas uma vez)
+if 'thread_precos' not in st.session_state:
+    thread = threading.Thread(target=atualizar_precos_periodicamente, args=(60,), daemon=True)
+    thread.start()
+    st.session_state['thread_precos'] = True
 
 
 # Título e descrição sempre visíveis
@@ -23,7 +62,7 @@ st.markdown("""
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
     st.markdown("<h2 style='color:#0a3d62;'>Menu</h2>", unsafe_allow_html=True)
-    menu = st.radio("", ["Gerenciar Portfólio", "Filtros de Visualização", "Atualizar Banco"], index=0)
+    menu = st.radio("Menu de opções", ["Gerenciar Portfólio", "Filtros de Visualização", "Atualizar Banco"], index=0, label_visibility="collapsed")
     scraper = Scraper(headless=True)
     ativos = listar_ativos()
     tickers = [a.ticker for a in ativos]
@@ -61,7 +100,6 @@ with st.sidebar:
         else:
             st.info("Nenhum ativo cadastrado.")
         st.markdown("---")
-        st.write(f"<span style='color:#0a3d62'><b>Ativos disponíveis:</b></span> {', '.join(tickers)}", unsafe_allow_html=True)
 
 
     elif menu == "Filtros de Visualização":
@@ -163,20 +201,24 @@ if ticker_sel:
             st.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
             st.bar_chart(df.set_index("Data")["Volume"])
     # Preço atual ao vivo
-    with tab3:
-        st.subheader(f"Preço Atual de {ticker_sel} (ao vivo)")
-        if st.button("Atualizar preço agora"):
-            with st.spinner("Buscando preço atual no Yahoo Finance..."):
-                scraper.start_driver()
-                dados = scraper.scrape_stock(ticker_sel)
-                scraper.quit_driver()
-            st.session_state['preco_atual'] = dados
-        preco_atual = st.session_state.get('preco_atual', None)
-        if preco_atual:
-            st.metric("Preço Atual", preco_atual.get("regular_market_price", "-"))
-            st.metric("Variação", preco_atual.get("regular_market_change", "-"))
-            st.metric("Variação (%)", preco_atual.get("regular_market_change_percent", "-"))
-        else:
-            st.info("Clique em 'Atualizar preço agora' para ver o preço ao vivo.")
+        with tab3:
+            st.subheader(f"Preço Atual de {ticker_sel} (atualização automática)")
+            def to_float(val):
+                if val is None:
+                    return None
+                if isinstance(val, str):
+                    val = val.replace('%', '').replace(',', '').strip()
+                try:
+                    return float(val)
+                except Exception:
+                    return None
+            preco_obj = consultar_preco_atual(ticker_sel)
+            if preco_obj:
+                st.metric("Preço Atual", preco_obj.preco)
+                st.metric("Variação", preco_obj.variacao)
+                st.metric("Variação (%)", preco_obj.variacao_percentual)
+                st.caption(f"Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}")
+            else:
+                st.info("Aguardando atualização automática do preço...")
 
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
