@@ -1,4 +1,16 @@
-"""Módulo de utilidades financeiras para scraping, fallback, conversão e atualização de preços. Não depende de Streamlit."""
+
+"""
+finance_utils.py
+-----------------
+Módulo de utilidades financeiras para scraping, fallback, conversão e atualização de preços.
+Não depende de Streamlit.
+"""
+
+import datetime
+import time
+import yfinance as yf
+from assets.scrapping import Scraper
+from assets.database import salvar_preco_atual, listar_ativos
 
 import yfinance as yf
 import datetime
@@ -6,6 +18,13 @@ from assets.scrapping import Scraper
 from assets.database import salvar_preco_atual, listar_ativos
 
 def to_float(val) -> float:
+    """
+    Converte valores para float, tratando strings, porcentagens e vírgulas.
+    Args:
+        val (str|float|None): Valor a ser convertido.
+    Returns:
+        float|None: Valor convertido ou None se não for possível.
+    """
     """
     Converte valores para float, tratando strings, porcentagens e vírgulas.
     Args:

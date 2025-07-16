@@ -1,10 +1,15 @@
 
+
 """
-Dashboard Financeiro Interativo
---------------------------------
+streamlit_app.py
+----------------
+Dashboard Financeiro Interativo.
 Módulo principal da aplicação Streamlit para visualização, cadastro e análise de ativos financeiros.
 Utiliza scraping, yfinance, banco de dados local e analytics customizados.
 """
+__author__ = "BigLeno"
+__version__ = "1.0"
+
 
 # === Imports ===
 __author__ = "BigLeno"
@@ -19,8 +24,8 @@ import yfinance as yf
 
 
 from assets.scrapping import Scraper
-from assets.database import listar_ativos, listar_historicos, inserir_ativo, consultar_preco_atual, salvar_preco_atual
-from assets.analytics_cache import atualizar_analytics_cache, consultar_analytics_cache
+from assets.database import (
+    listar_ativos, listar_historicos, inserir_ativo, consultar_preco_atual, salvar_preco_atual, atualizar_analytics_cache, consultar_analytics_cache)
 from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_precos_periodicamente
 
 
@@ -71,6 +76,10 @@ def buscar_e_salvar_preco() -> None:
     Busca o preço do ativo recém-adicionado e salva no banco de dados.
     Executado em thread para não travar o front.
     """
+    """
+    Busca o preço do ativo recém-adicionado e salva no banco de dados.
+    Executado em thread para não travar o front.
+    """
     dados = buscar_preco_com_fallback(novo_ativo)
     salvar_preco_atual(
         novo_ativo,
@@ -81,6 +90,11 @@ def buscar_e_salvar_preco() -> None:
     )
         
 def preco_atual_html() -> str:
+    """
+    Gera HTML com o preço atual, variação e data/hora da última atualização do ativo selecionado.
+    Returns:
+        str: HTML formatado para exibição no Streamlit.
+    """
     """
     Gera HTML com o preço atual, variação e data/hora da última atualização do ativo selecionado.
     Retorna:

@@ -1,16 +1,31 @@
+
+"""
+database.py
+-----------
+Módulo de persistência e consulta ao banco de dados para ativos, históricos, preços e analytics cache.
+"""
+
+import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from assets.models import Base, Ativo, Historico, PrecoAtual
-import datetime
 
 DATABASE_URL = 'sqlite:///streamlit_pipeline.db'
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
 
 def criar_banco():
+    """
+    Cria as tabelas do banco de dados, se não existirem.
+    """
     Base.metadata.create_all(engine)
 
 def inserir_ativo(ticker: str):
+    """
+    Insere um novo ativo no banco, se não existir.
+    Args:
+        ticker (str): Código do ativo.
+    """
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
@@ -20,12 +35,20 @@ def inserir_ativo(ticker: str):
     session.close()
 
 def listar_ativos():
+    """
+    Lista todos os ativos cadastrados.
+    Returns:
+        list: Lista de objetos Ativo.
+    """
     session = SessionLocal()
     ativos = session.query(Ativo).all()
     session.close()
     return ativos
 
 def inserir_historico(ticker: str, data: datetime.date, preco_abertura: float, preco_fechamento: float, maximo: float, minimo: float, volume: float):
+    """
+    Insere um novo histórico de preço para um ativo.
+    """
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
@@ -49,6 +72,11 @@ def inserir_historico(ticker: str, data: datetime.date, preco_abertura: float, p
     session.close()
 
 def listar_historicos(ticker: str):
+    """
+    Lista todos os históricos de um ativo.
+    Returns:
+        list: Lista de objetos Historico.
+    """
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
@@ -60,6 +88,9 @@ def listar_historicos(ticker: str):
 
 # Função para salvar preço atual
 def salvar_preco_atual(ticker: str, preco: float, variacao: float = None, variacao_percentual: float = None, atualizado_em: datetime.datetime = None):
+    """
+    Salva ou atualiza o preço atual de um ativo.
+    """
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
@@ -90,6 +121,11 @@ def salvar_preco_atual(ticker: str, preco: float, variacao: float = None, variac
 
 # Função para consultar preço atual
 def consultar_preco_atual(ticker: str):
+    """
+    Consulta o preço atual de um ativo.
+    Returns:
+        PrecoAtual|None: Objeto PrecoAtual ou None se não encontrado.
+    """
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
@@ -113,6 +149,10 @@ def atualizar_analytics_cache() -> None:
     Atualiza o cache dos destaques de analytics no banco de dados.
     Remove entradas antigas e salva os novos destaques calculados.
     """
+    """
+    Atualiza o cache dos destaques de analytics no banco de dados.
+    Remove entradas antigas e salva os novos destaques calculados.
+    """
     session = SessionLocal()
     session.query(AnalyticsCache).delete()
     ativo1, rent1 = ativo_maior_rentabilidade_12m()
@@ -125,6 +165,11 @@ def atualizar_analytics_cache() -> None:
     session.close()
 
 def consultar_analytics_cache() -> list:
+    """
+    Consulta todos os registros de analytics cache do banco de dados.
+    Returns:
+        list: Lista de objetos AnalyticsCache.
+    """
     """
     Consulta todos os registros de analytics cache do banco de dados.
     Returns:

@@ -1,11 +1,22 @@
-import pandas as pd
-from assets.database import listar_historicos, listar_ativos
+
+"""
+analytics.py
+------------
+Funções de análise financeira: maior rentabilidade, menor rentabilidade (MM3M), maior tendência de crescimento.
+"""
+
 import datetime
-from collections import defaultdict
-from sklearn.linear_model import LinearRegression
+import pandas as pd
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from assets.database import listar_historicos, listar_ativos
 
 def ativo_maior_rentabilidade_12m():
+    """
+    Retorna o ativo com maior rentabilidade nos últimos 12 meses.
+    Returns:
+        tuple: (ticker, rentabilidade)
+    """
     """Retorna o ativo com maior rentabilidade nos últimos 12 meses."""
     hoje = datetime.date.today()
     doze_meses_atras = hoje - datetime.timedelta(days=365)
@@ -26,6 +37,11 @@ def ativo_maior_rentabilidade_12m():
     return melhor_ativo, melhor_rent
 
 def ativo_menor_rentabilidade_mm3m():
+    """
+    Retorna o ativo com menor rentabilidade pela média móvel de 3 meses.
+    Returns:
+        tuple: (ticker, rentabilidade)
+    """
     """Retorna o ativo com menor rentabilidade pela média móvel de 3 meses."""
     hoje = datetime.date.today()
     tres_meses_atras = hoje - datetime.timedelta(days=90)
@@ -47,6 +63,11 @@ def ativo_menor_rentabilidade_mm3m():
     return pior_ativo, pior_rent
 
 def ativo_maior_tendencia_crescimento_1m():
+    """
+    Retorna o ativo com maior tendência de crescimento para o próximo mês (regressão linear).
+    Returns:
+        tuple: (ticker, tendencia)
+    """
     """Retorna o ativo com maior tendência de crescimento para o próximo mês (regressão linear)."""
     hoje = datetime.date.today()
     tres_meses_atras = hoje - datetime.timedelta(days=90)

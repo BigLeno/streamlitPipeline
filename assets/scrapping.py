@@ -1,12 +1,16 @@
+
 """
-    Módulo de scraping para extração de dados financeiros.
+scrapping.py
+------------
+Módulo de scraping para extração de dados financeiros do Yahoo Finance.
+Inclui coleta de históricos, dados principais e resumo de ativos.
 """
 
 import datetime
-import pandas as pd
 import os
 import re
 import time
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
@@ -15,15 +19,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common import TimeoutException
-
 from assets.database import criar_banco, inserir_ativo, inserir_historico
 
 
-
 class Scraper:
+    """
+    Classe principal para scraping de dados financeiros do Yahoo Finance.
+    """
 
     @staticmethod
     def get_period_range(periodo: str, hoje: datetime.date = None):
+        """
+        Retorna a tupla (data_inicial, data_final) para o período informado.
+        """
         """
         Retorna a tupla (data_inicial, data_final) para o período informado.
         """
@@ -43,6 +51,9 @@ class Scraper:
         return periodos[periodo](hoje)
 
     def coletar_e_salvar_historico_ativos(self, ativos: list, periodos='5Y'):
+        """
+        Coleta e salva no banco o histórico dos ativos para o(s) período(s) informado(s). Não salva CSV.
+        """
         """
         Coleta e salva no banco o histórico dos ativos para o(s) período(s) informado(s). Não salva CSV.
         """
@@ -98,12 +109,18 @@ class Scraper:
     }
 
     def __init__(self, headless=True, window_size=(1150, 1000)):
+        """
+        Inicializa o Scraper com opções do Selenium.
+        """
         """Inicializa o Scraper com opções do Selenium."""
         self.headless = headless
         self.window_size = window_size
         self.driver = None
 
     def start_driver(self) -> None:
+        """
+        Inicializa o driver do Selenium Chrome.
+        """
         """
         Inicializa o driver do Selenium Chrome.
         """
@@ -121,10 +138,16 @@ class Scraper:
         """
         Converte um datetime para string no formato 'YYYY-MM-DD'.
         """
+        """
+        Converte um datetime para string no formato 'YYYY-MM-DD'.
+        """
         return dt.strftime('%Y-%m-%d')
 
     @staticmethod
     def _date_to_unix(date_str: str) -> int:
+        """
+        Converte uma string de data 'YYYY-MM-DD' para timestamp Unix.
+        """
         """
         Converte uma string de data 'YYYY-MM-DD' para timestamp Unix.
         """
@@ -134,11 +157,21 @@ class Scraper:
         """
         Encerra o driver do Selenium se estiver ativo.
         """
+        """
+        Encerra o driver do Selenium se estiver ativo.
+        """
         if self.driver:
             self.driver.quit()
             self.driver = None
 
     def scrape_stock(self, ticker_symbol: str) -> dict:
+        """
+        Realiza o scraping dos dados principais do ativo no Yahoo Finance.
+        Args:
+            ticker_symbol (str): Ticker do ativo.
+        Returns:
+            dict: Dicionário com os dados principais do ativo.
+        """
         """
         Realiza o scraping dos dados principais do ativo no Yahoo Finance.
         Args:
@@ -177,6 +210,9 @@ class Scraper:
         return data
 
     def _accept_cookies(self) -> None:
+        """
+        Aceita cookies se o overlay estiver presente.
+        """
         """Aceita cookies se o overlay estiver presente."""
         try:
             consent_overlay = WebDriverWait(self.driver, 3).until(
@@ -188,6 +224,9 @@ class Scraper:
             pass
 
     def _get_market_data(self, ticker_symbol: str) -> dict:
+        """
+        Obtém preço, variação e variação percentual do ativo.
+        """
         """Obtém preço, variação e variação percentual do ativo."""
         data = {}
         try:
@@ -218,6 +257,9 @@ class Scraper:
         return data
 
     def _get_summary_data(self, ticker_symbol: str) -> dict:
+        """
+        Obtém dados do resumo do ativo (ex: volume, PE, etc).
+        """
         """Obtém dados do resumo do ativo (ex: volume, PE, etc)."""
         summary_fields = {
             "previous_close": "PREV_CLOSE-value",
@@ -259,6 +301,17 @@ class Scraper:
         Returns:
             pd.DataFrame: DataFrame com os dados históricos limpos.
         """
+        """
+        Extrai dados históricos do Yahoo Finance para o ticker informado.
+        Remove linhas de dividendos/splits e trata intervalos sem dados.
+        Args:
+            ticker_symbol (str): Ticker do ativo.
+            days (int, opcional): Número máximo de linhas (ignorado se datas forem passadas).
+            data_inicial (str, opcional): Data inicial no formato 'YYYY-MM-DD'.
+            data_final (str, opcional): Data final no formato 'YYYY-MM-DD'.
+        Returns:
+            pd.DataFrame: DataFrame com os dados históricos limpos.
+        """
         url = self._build_history_url(ticker_symbol, data_inicial, data_final)
         self.driver.get(url)
         try:
@@ -282,6 +335,9 @@ class Scraper:
             return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
 
     def _build_history_url(self, ticker_symbol: str, data_inicial: str, data_final: str) -> str:
+        """
+        Monta a URL de histórico do Yahoo Finance para o ticker e datas informadas.
+        """
         """Monta a URL de histórico do Yahoo Finance para o ticker e datas informadas."""
         if data_inicial and data_final:
             period1 = self._date_to_unix(data_inicial)
@@ -290,6 +346,9 @@ class Scraper:
         return f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
 
     def _parse_historical_table(self, html: str, days: int = None, data_inicial: str = None) -> list:
+        """
+        Extrai e limpa as linhas válidas da tabela de histórico do HTML.
+        """
         """Extrai e limpa as linhas válidas da tabela de histórico do HTML."""
         padrao_linha = re.compile(r'<tr.*?>\s*(<td.*?>.*?</td>\s*){7,}.*?</tr>', re.DOTALL)
         padrao_coluna = re.compile(r'<td.*?>(.*?)</td>', re.DOTALL)
@@ -306,6 +365,9 @@ class Scraper:
         return dados
 
     def _add_today_if_missing(self, df: pd.DataFrame, ticker_symbol: str) -> None:
+        """
+        Adiciona linha do dia atual se não existir no DataFrame. Preenche campos vazios com 'N/A'.
+        """
         """Adiciona linha do dia atual se não existir no DataFrame. Preenche campos vazios com 'N/A'."""
         hoje = datetime.datetime.now().strftime('%b %d, %Y')
         if not (df['Date'] == hoje).any():
@@ -327,6 +389,12 @@ class Scraper:
                 print(f"[AVISO] Não foi possível adicionar linha do dia atual para {ticker_symbol}: {e}")
 
     def coletar_historico_ativos(self, ativos: list, periodos=None) -> None:
+        """
+        Coleta o histórico dos ativos informados, salvando arquivos para cada período solicitado na pasta 'historicos'.
+        Args:
+            ativos (list): Lista de tickers.
+            periodos (list|str, opcional): Lista de períodos ou string única. Se None, usa ['6M', '1Y'].
+        """
         """
         Coleta o histórico dos ativos informados, salvando arquivos para cada período solicitado na pasta 'historicos'.
         Args:
