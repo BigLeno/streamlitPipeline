@@ -12,7 +12,18 @@ from selenium.webdriver.common.by import By
 from selenium.common import TimeoutException
 
 
+
 class Scraper:
+    PERIODOS = {
+        '1D': lambda hoje: (hoje - datetime.timedelta(days=1), hoje),
+        '5D': lambda hoje: (hoje - datetime.timedelta(days=5), hoje),
+        '3M': lambda hoje: (hoje - datetime.timedelta(days=90), hoje),
+        '6M': lambda hoje: (hoje - datetime.timedelta(days=180), hoje),
+        'YTD': lambda hoje: (hoje.replace(month=1, day=1), hoje),
+        '1Y': lambda hoje: (hoje - datetime.timedelta(days=365), hoje),
+        '5Y': lambda hoje: (hoje - datetime.timedelta(days=5*365), hoje),
+    }
+
     def __init__(self, headless=True, window_size=(1150, 1000)):
         self.headless = headless
         self.window_size = window_size
@@ -155,53 +166,46 @@ class Scraper:
             print(f"[ERRO] Não foi possível extrair histórico de {ticker_symbol}: {e}")
             return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
 
-    def coletar_historico_ativos(self, ativos):
+    def coletar_historico_ativos(self, ativos, periodos=None):
         """
-        Coleta o histórico dos ativos informados, salvando arquivos de 6M e 12M na pasta 'historicos'.
+        Coleta o histórico dos ativos informados, salvando arquivos para cada período solicitado na pasta 'historicos'.
+        periodos: lista de strings, ex: ['1D', '6M', 'YTD', ...]. Se None, usa ['6M', '1Y'] como padrão.
         """
         import os
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         os.makedirs('historicos', exist_ok=True)
 
         def date_to_str(dt):
             return dt.strftime('%Y-%m-%d')
 
-        hoje = datetime.today()
-        seis_meses_atras = hoje - timedelta(days=180)
-        um_ano_atras = hoje - timedelta(days=365)
+        if periodos is None:
+            periodos = ['6M', '1Y']
+        elif isinstance(periodos, str):
+            periodos = [periodos]
 
+        hoje = datetime.today()
         self.start_driver()
 
         for ticker in ativos:
-            print(f"Coletando histórico de {ticker} (últimos 6 meses)...")
-            try:
-                df = self.scrape_historical_data(
-                    ticker,
-                    data_inicial=date_to_str(seis_meses_atras),
-                    data_final=date_to_str(hoje)
-                )
-                if df.empty:
-                    print(f"[ERRO] DataFrame vazio para {ticker}. Verifique se a tabela carregou corretamente.")
-                else:
-                    df.to_csv(f"historicos/historical_{ticker}_6M.csv", index=False)
-                    print(f"Histórico salvo em historicos/historical_{ticker}_6M.csv")
-            except Exception as e:
-                print(f"[ERRO] Não foi possível coletar histórico de {ticker}: {e}")
-
-            print(f"Coletando histórico de {ticker} (últimos 12 meses)...")
-            try:
-                df2 = self.scrape_historical_data(
-                    ticker,
-                    data_inicial=date_to_str(um_ano_atras),
-                    data_final=date_to_str(hoje)
-                )
-                if df2.empty:
-                    print(f"[ERRO] DataFrame vazio para {ticker} (12 meses). Verifique se a tabela carregou corretamente.")
-                else:
-                    df2.to_csv(f"historicos/historical_{ticker}_12M.csv", index=False)
-                    print(f"Histórico salvo em historicos/historical_{ticker}_12M.csv")
-            except Exception as e:
-                print(f"[ERRO] Não foi possível coletar histórico de {ticker} (12 meses): {e}")
+            for periodo in periodos:
+                if periodo not in self.PERIODOS:
+                    print(f"[ERRO] Período '{periodo}' não reconhecido. Pulando...")
+                    continue
+                data_inicial, data_final = self.PERIODOS[periodo](hoje)
+                print(f"Coletando histórico de {ticker} ({periodo})...")
+                try:
+                    df = self.scrape_historical_data(
+                        ticker,
+                        data_inicial=date_to_str(data_inicial),
+                        data_final=date_to_str(data_final)
+                    )
+                    if df.empty:
+                        print(f"[ERRO] DataFrame vazio para {ticker} ({periodo}). Verifique se a tabela carregou corretamente.")
+                    else:
+                        df.to_csv(f"historicos/historical_{ticker}_{periodo}.csv", index=False)
+                        print(f"Histórico salvo em historicos/historical_{ticker}_{periodo}.csv")
+                except Exception as e:
+                    print(f"[ERRO] Não foi possível coletar histórico de {ticker} ({periodo}): {e}")
 
         self.quit_driver()
