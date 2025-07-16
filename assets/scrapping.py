@@ -1,4 +1,6 @@
-
+"""
+    Módulo de scraping para extração de dados financeiros.
+"""
 
 import datetime
 import pandas as pd
@@ -29,6 +31,7 @@ class Scraper:
     }
 
     def __init__(self, headless=True, window_size=(1150, 1000)):
+        """Inicializa o Scraper com opções do Selenium."""
         self.headless = headless
         self.window_size = window_size
         self.driver = None
