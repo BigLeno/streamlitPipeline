@@ -98,7 +98,10 @@ with st.sidebar:
                 inserir_ativo(novo_ativo)
                 def buscar_e_salvar_preco():
                     from assets.database import salvar_preco_atual
-                    dados = scraper.scrape_stock(novo_ativo)
+                    from assets.scrapping import Scraper
+                    scraper_thread = Scraper(headless=True)
+                    scraper_thread.start_driver()
+                    dados = scraper_thread.scrape_stock(novo_ativo)
                     def to_float(val):
                         if val is None:
                             return None
@@ -115,6 +118,7 @@ with st.sidebar:
                         variacao_percentual=to_float(dados.get("regular_market_change_percent")),
                         atualizado_em=None
                     )
+                    scraper_thread.quit_driver()
                 # Buscar preço em thread para não travar o front
                 threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
