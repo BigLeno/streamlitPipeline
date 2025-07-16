@@ -96,6 +96,27 @@ with st.sidebar:
                 st.error(f"O ativo {novo_ativo} já existe!")
             else:
                 inserir_ativo(novo_ativo)
+                def buscar_e_salvar_preco():
+                    from assets.database import salvar_preco_atual
+                    dados = scraper.scrape_stock(novo_ativo)
+                    def to_float(val):
+                        if val is None:
+                            return None
+                        if isinstance(val, str):
+                            val = val.replace('%', '').replace(',', '.').strip()
+                        try:
+                            return float(val)
+                        except Exception:
+                            return None
+                    salvar_preco_atual(
+                        novo_ativo,
+                        preco=to_float(dados.get("regular_market_price")),
+                        variacao=to_float(dados.get("regular_market_change")),
+                        variacao_percentual=to_float(dados.get("regular_market_change_percent")),
+                        atualizado_em=None
+                    )
+                # Buscar preço em thread para não travar o front
+                threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
                     scraper.coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
                 # Rodar analytics em thread
@@ -106,11 +127,12 @@ with st.sidebar:
         if tickers:
             remover_ativo = st.selectbox("Selecione para remover", tickers, key="remover_ativo")
             if st.button("🗑️ Remover ativo selecionado"):
-                from assets.database import SessionLocal, Ativo, Historico
+                from assets.database import SessionLocal, Ativo, Historico, PrecoAtual
                 session = SessionLocal()
                 ativo_obj = session.query(Ativo).filter_by(ticker=remover_ativo).first()
                 if ativo_obj:
                     session.query(Historico).filter_by(ativo_id=ativo_obj.id).delete()
+                    session.query(PrecoAtual).filter_by(ativo_id=ativo_obj.id).delete()
                     session.delete(ativo_obj)
                     session.commit()
                     # Rodar analytics em thread
