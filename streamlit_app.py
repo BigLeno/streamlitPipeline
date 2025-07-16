@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from assets.analytics import (
@@ -10,92 +9,96 @@ from assets.database import listar_ativos, listar_historicos, inserir_ativo
 import datetime
 from assets.scrapping import Scraper
 
-st.caption("Desenvolvido com Streamlit e Python | Dados: Yahoo Finance")
+st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
 
-st.set_page_config(page_title="Analytics Financeiro", layout="wide")
-st.title("📈 Analytics Financeiro")
+# Título e descrição sofisticados
+titulo = """
+<h1 style='font-size:2.5rem; color:#0a3d62; margin-bottom:0;'>💹 Dashboard Financeiro Interativo</h1>
+<p style='font-size:1.2rem; color:#222; margin-top:0;'>Acompanhe, compare e explore ativos do mercado financeiro brasileiro em tempo real.<br>Ferramentas de análise, gráficos dinâmicos e gestão de portfólio em um só lugar.</p>
+"""
+st.markdown(titulo, unsafe_allow_html=True)
 
-# Sidebar para seleção
+# Sidebar refinada
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
+    st.header("Gerencie seu Portfólio")
+    scraper = Scraper(headless=True)
+    if st.button("🔄 Atualizar banco (coletar históricos)"):
+        with st.spinner("Coletando históricos de todos os ativos..."):
+            scraper.coletar_e_salvar_historico_ativos([a.ticker for a in listar_ativos()], periodos='5Y')
+        st.success("Banco atualizado!")
+    novo_ativo = st.text_input("Adicionar novo ativo (ex: BBDC4.SA)")
+    if st.button("➕ Adicionar ativo"):
+        if novo_ativo:
+            inserir_ativo(novo_ativo)
+            st.success(f"Ativo {novo_ativo} adicionado!")
+        else:
+            st.warning("Digite um ticker válido.")
+    ativos = listar_ativos()
+    tickers = [a.ticker for a in ativos]
+    remover_ativo = st.selectbox("Remover ativo", tickers)
+    if st.button("🗑️ Remover ativo selecionado"):
+        from assets.database import SessionLocal, Ativo, Historico
+        session = SessionLocal()
+        ativo_obj = session.query(Ativo).filter_by(ticker=remover_ativo).first()
+        if ativo_obj:
+            session.query(Historico).filter_by(ativo_id=ativo_obj.id).delete()
+            session.delete(ativo_obj)
+            session.commit()
+            st.success(f"Ativo {remover_ativo} removido!")
+        else:
+            st.warning("Ativo não encontrado.")
+        session.close()
+        st.experimental_rerun()
+    st.markdown("---")
+    st.write(f"<span style='color:#0a3d62'><b>Ativos disponíveis:</b></span> {', '.join(tickers)}", unsafe_allow_html=True)
+    st.header("Filtros de Visualização")
+    periodos = {
+        "1 mês": 30,
+        "3 meses": 90,
+        "6 meses": 180,
+        "1 ano": 365,
+        "5 anos": 5*365
+    }
+    ticker_sel = st.selectbox("Selecione o ativo", tickers, key="ticker_sel")
+    periodo_sel = st.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
+    dias = periodos[periodo_sel]
 
-st.sidebar.header("Gerenciamento de Ativos e Banco")
-scraper = Scraper(headless=True)
+# Destaques do Mercado
 
-# Atualizar banco (coletar históricos de todos os ativos)
-if st.sidebar.button("Atualizar banco (coletar históricos)"):
-    with st.spinner("Coletando históricos de todos os ativos..."):
-        scraper.coletar_e_salvar_historico_ativos([a.ticker for a in listar_ativos()], periodos='5Y')
-    st.sidebar.success("Banco atualizado!")
-
-# Adicionar novo ativo
-novo_ativo = st.sidebar.text_input("Adicionar novo ativo (ex: BBDC4.SA)")
-if st.sidebar.button("Adicionar ativo"):
-    if novo_ativo:
-        inserir_ativo(novo_ativo)
-        st.sidebar.success(f"Ativo {novo_ativo} adicionado!")
+# Destaques do Mercado (versão nativa Streamlit)
+st.markdown("""
+<div style='background: linear-gradient(90deg,#eaf6fb 60%,#f7f1e3 100%); border-radius:12px; padding:1.5rem 1rem 1rem 1rem; margin-bottom:2rem;'>
+    <h2 style='color:#0a3d62; margin-bottom:0.5rem;'>✨ Destaques do Mercado</h2>
+</div>
+""", unsafe_allow_html=True)
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.subheader("Maior rentabilidade (12 meses)")
+    ativo, rent = ativo_maior_rentabilidade_12m()
+    if ativo:
+        st.success(f"{ativo}", icon="⬆️")
+        st.metric("Rentabilidade", f"{rent:.2%}")
     else:
-        st.sidebar.warning("Digite um ticker válido.")
-
-# Remover ativo
-ativos = listar_ativos()
-tickers = [a.ticker for a in ativos]
-remover_ativo = st.sidebar.selectbox("Remover ativo", tickers)
-if st.sidebar.button("Remover ativo selecionado"):
-    from assets.database import SessionLocal, Ativo, Historico
-    session = SessionLocal()
-    ativo_obj = session.query(Ativo).filter_by(ticker=remover_ativo).first()
-    if ativo_obj:
-        session.query(Historico).filter_by(ativo_id=ativo_obj.id).delete()
-        session.delete(ativo_obj)
-        session.commit()
-        st.sidebar.success(f"Ativo {remover_ativo} removido!")
+        st.warning("Sem dados")
+with col2:
+    st.subheader("Menor rentabilidade (MM 3 meses)")
+    ativo, rent = ativo_menor_rentabilidade_mm3m()
+    if ativo:
+        st.error(f"{ativo}", icon="⬇️")
+        st.metric("Rentabilidade", f"{rent:.2%}")
     else:
-        st.sidebar.warning("Ativo não encontrado.")
-    session.close()
-    st.experimental_rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.write(f"Ativos disponíveis: {', '.join(tickers)}")
-
-# Filtros de visualização
-st.sidebar.header("Filtros de Visualização")
-periodos = {
-    "1 mês": 30,
-    "3 meses": 90,
-    "6 meses": 180,
-    "1 ano": 365,
-    "5 anos": 5*365
-}
-ticker_sel = st.sidebar.selectbox("Selecione o ativo", tickers, key="ticker_sel")
-periodo_sel = st.sidebar.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
-dias = periodos[periodo_sel]
-
-# Insights obrigatórios
-with st.expander("🔎 Insights obrigatórios", expanded=True):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("**Maior rentabilidade (12 meses)**")
-        ativo, rent = ativo_maior_rentabilidade_12m()
-        if ativo:
-            st.success(f"{ativo}\n{rent:.2%}")
-        else:
-            st.warning("Sem dados")
-    with col2:
-        st.markdown("**Menor rentabilidade (MM 3 meses)**")
-        ativo, rent = ativo_menor_rentabilidade_mm3m()
-        if ativo:
-            st.error(f"{ativo}\n{rent:.2%}")
-        else:
-            st.warning("Sem dados")
-    with col3:
-        st.markdown("**Maior tendência de crescimento (próx. mês)**")
-        ativo, tendencia = ativo_maior_tendencia_crescimento_1m()
-        if ativo:
-            st.info(f"{ativo}\nCoef.: {tendencia:.4f}")
-        else:
-            st.warning("Sem dados")
+        st.warning("Sem dados")
+with col3:
+    st.subheader("Maior tendência de crescimento (próx. mês)")
+    ativo, tendencia = ativo_maior_tendencia_crescimento_1m()
+    if ativo:
+        st.info(f"{ativo}", icon="📈")
+        st.metric("Coeficiente", f"{tendencia:.4f}")
+    else:
+        st.warning("Sem dados")
 
 st.markdown("---")
-
 
 # Gráficos e preço atual
 hoje = datetime.date.today()
@@ -137,4 +140,4 @@ with tab3:
     else:
         st.info("Clique em 'Atualizar preço agora' para ver o preço ao vivo.")
 
-st.caption("Desenvolvido com Streamlit e Python | Dados: Yahoo Finance")
+st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
