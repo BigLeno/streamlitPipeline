@@ -22,6 +22,66 @@ import time
 import datetime
 import yfinance as yf
 
+from datetime import datetime as dt, time as dttime
+
+# === Função para verificar se o mercado dos EUA está aberto ===
+def mercado_eua_aberto() -> bool:
+    """
+    Verifica se o mercado dos EUA (NYSE/Nasdaq) está aberto agora.
+    Retorna:
+        bool: True se aberto, False se fechado.
+    """
+    # Horário de funcionamento NYSE/Nasdaq: 9:30 às 16:00 (horário NY)
+    import pytz
+    ny_tz = pytz.timezone('America/New_York')
+    agora_ny = dt.now(ny_tz)
+    weekday = agora_ny.weekday()
+    if weekday >= 5:
+        return False
+    abertura = dttime(9, 30)
+    fechamento = dttime(16, 0)
+    return abertura <= agora_ny.time() <= fechamento
+
+# Estado anterior do mercado (para trigger de atualização de analytics)
+if 'mercado_aberto' not in st.session_state:
+    st.session_state['mercado_aberto'] = None
+
+# Checa status do mercado e atualiza analytics se mudou
+mercado_aberto = mercado_eua_aberto()
+if st.session_state['mercado_aberto'] is None:
+    st.session_state['mercado_aberto'] = mercado_aberto
+elif st.session_state['mercado_aberto'] != mercado_aberto:
+    # Mudou o status: reprocessa analytics
+    atualizar_analytics_cache()
+    st.session_state['mercado_aberto'] = mercado_aberto
+
+
+# === Exibe status do mercado dos EUA no topo do dashboard ===
+import pytz
+ny_tz = pytz.timezone('America/New_York')
+agora_ny = dt.now(ny_tz)
+hora_str = agora_ny.strftime('%H:%M')
+dia_semana = agora_ny.strftime('%A')
+
+if mercado_aberto:
+    status_str = (
+        f"<span style='color:#27ae60;font-weight:bold;'>🟢 Mercado dos EUA ABERTO</span>"
+        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span>"
+    )
+    tooltip = "O mercado está aberto (NYSE/Nasdaq, 9:30-16:00 NY)."
+else:
+    status_str = (
+        f"<span style='color:#c0392b;font-weight:bold;'>🔴 Mercado dos EUA FECHADO</span>"
+        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span>"
+    )
+    tooltip = "O mercado está fechado (NYSE/Nasdaq, 9:30-16:00 NY)."
+
+st.markdown(f"""
+<div style='display:flex;align-items:center;gap:0.5em;margin-bottom:0.7em;'>
+  <span title='{tooltip}'>{status_str}</span>
+</div>
+""", unsafe_allow_html=True)
+
 
 from assets.scrapping import Scraper
 from assets.database import (
