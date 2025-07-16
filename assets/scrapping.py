@@ -1,7 +1,11 @@
 
+
 import datetime
 import pandas as pd
 import csv
+import os
+import re
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
@@ -38,6 +42,14 @@ class Scraper:
             options=options
         )
         self.driver.set_window_size(*self.window_size)
+
+    @staticmethod
+    def _date_to_str(dt):
+        return dt.strftime('%Y-%m-%d')
+
+    @staticmethod
+    def _date_to_unix(date_str):
+        return int(time.mktime(time.strptime(date_str, "%Y-%m-%d")))
 
     def quit_driver(self):
         if self.driver:
@@ -115,14 +127,9 @@ class Scraper:
         days: número máximo de linhas (ignorado se datas forem passadas)
         data_inicial/data_final: strings 'YYYY-MM-DD' para montar a URL com period1/period2
         """
-        import re
-        import time
-        def date_to_unix(date_str):
-            return int(time.mktime(time.strptime(date_str, "%Y-%m-%d")))
-
         if data_inicial and data_final:
-            period1 = date_to_unix(data_inicial)
-            period2 = date_to_unix(data_final)
+            period1 = self._date_to_unix(data_inicial)
+            period2 = self._date_to_unix(data_final)
             url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history/?period1={period1}&period2={period2}"
         else:
             url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
@@ -171,20 +178,15 @@ class Scraper:
         Coleta o histórico dos ativos informados, salvando arquivos para cada período solicitado na pasta 'historicos'.
         periodos: lista de strings, ex: ['1D', '6M', 'YTD', ...]. Se None, usa ['6M', '1Y'] como padrão.
         """
-        import os
-        from datetime import datetime
-
+        
         os.makedirs('historicos', exist_ok=True)
-
-        def date_to_str(dt):
-            return dt.strftime('%Y-%m-%d')
 
         if periodos is None:
             periodos = ['6M', '1Y']
         elif isinstance(periodos, str):
             periodos = [periodos]
 
-        hoje = datetime.today()
+        hoje = datetime.datetime.today()
         self.start_driver()
 
         for ticker in ativos:
@@ -197,8 +199,8 @@ class Scraper:
                 try:
                     df = self.scrape_historical_data(
                         ticker,
-                        data_inicial=date_to_str(data_inicial),
-                        data_final=date_to_str(data_final)
+                        data_inicial=self._date_to_str(data_inicial),
+                        data_final=self._date_to_str(data_final)
                     )
                     if df.empty:
                         print(f"[ERRO] DataFrame vazio para {ticker} ({periodo}). Verifique se a tabela carregou corretamente.")
