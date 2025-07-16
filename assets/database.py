@@ -69,6 +69,13 @@ def inserir_historico(ticker: str, data: datetime.date, preco_abertura: float, p
         )
         session.add(historico)
         session.commit()
+    else:
+        historico_existente.preco_abertura = preco_abertura
+        historico_existente.preco_fechamento = preco_fechamento
+        historico_existente.maximo = maximo
+        historico_existente.minimo = minimo
+        historico_existente.volume = volume
+        session.commit()
     session.close()
 
 def listar_historicos(ticker: str):
