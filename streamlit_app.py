@@ -71,18 +71,22 @@ with st.sidebar:
     ativos = listar_ativos()
     tickers = [a.ticker for a in ativos]
 
-    # Filtros de Visualização sempre visíveis e primeiro
-    st.subheader("Filtros de Visualização")
-    periodos = {
-        "1 mês": 30,
-        "3 meses": 90,
-        "6 meses": 180,
-        "1 ano": 365,
-        "5 anos": 5*365
-    }
-    ticker_sel = st.selectbox("Selecione o ativo", tickers, key="ticker_sel")
-    periodo_sel = st.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
-    dias = periodos[periodo_sel]
+    if menu == "Filtros de Visualização":
+        st.subheader("Filtros de Visualização")
+        periodos = {
+            "1 mês": 30,
+            "3 meses": 90,
+            "6 meses": 180,
+            "1 ano": 365,
+            "5 anos": 5*365
+        }
+        ticker_sel = st.selectbox("Selecione o ativo", tickers, key="ticker_sel")
+        periodo_sel = st.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
+        dias = periodos[periodo_sel]
+    else:
+        ticker_sel = st.session_state.get('ticker_sel')
+        periodo_sel = st.session_state.get('periodo_sel')
+        dias = st.session_state.get('dias')
 
     if menu == "Gerenciar Portfólio":
         st.subheader("Adicionar novo ativo")
@@ -182,8 +186,8 @@ if ticker_sel:
         data_inicio = hoje - datetime.timedelta(days=dias)
         historicos = [h for h in listar_historicos(ticker_sel) if h.data >= data_inicio and h.preco_fechamento]
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "� Abertura",
-        "� Fechamento",
+        "📈 Abertura",
+        "📉 Fechamento",
         "🔼 Máximo",
         "🔽 Mínimo",
         "📊 Volume"
@@ -205,7 +209,7 @@ if ticker_sel:
             "Volume": [h.volume for h in historicos]
         })
 
-        # Preço Atual sempre acima do título do gráfico
+        # Função para exibir preço atual logo abaixo do título do gráfico
         def to_float(val):
             if val is None:
                 return None
@@ -215,42 +219,48 @@ if ticker_sel:
                 return float(val)
             except Exception:
                 return None
-        preco_obj = consultar_preco_atual(ticker_sel)
-        if preco_obj:
-            preco = to_float(preco_obj.preco)
-            variacao = to_float(preco_obj.variacao)
-            variacao_pct = to_float(preco_obj.variacao_percentual)
-            cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
-            variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
-            variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
-            st.markdown(f"""
-                <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
-                  <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
-                    {preco if preco is not None else '-'}
-                  </span>
-                  <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
-                    {variacao_str} {variacao_pct_str}
-                  </span>
-                </div>
-                <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info("Aguardando atualização automática do preço...")
+        def preco_atual_html():
+            preco_obj = consultar_preco_atual(ticker_sel)
+            if preco_obj:
+                preco = to_float(preco_obj.preco)
+                variacao = to_float(preco_obj.variacao)
+                variacao_pct = to_float(preco_obj.variacao_percentual)
+                cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
+                variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
+                variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
+                return f"""
+                    <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
+                      <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
+                        {preco if preco is not None else '-'}
+                      </span>
+                      <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
+                        {variacao_str} {variacao_pct_str}
+                      </span>
+                    </div>
+                    <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
+                """
+            else:
+                return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
 
         with tab1:
             st.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
-            st.line_chart(df.set_index("Data")["Abertura"])
+            st.markdown(preco_atual_html(), unsafe_allow_html=True)
+            st.line_chart(df.set_index("Data")['Abertura'])
         with tab2:
             st.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
-            st.line_chart(df.set_index("Data")["Fechamento"])
+            st.markdown(preco_atual_html(), unsafe_allow_html=True)
+            st.line_chart(df.set_index("Data")['Fechamento'])
         with tab3:
             st.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
-            st.line_chart(df.set_index("Data")["Máximo"])
+            st.markdown(preco_atual_html(), unsafe_allow_html=True)
+            st.line_chart(df.set_index("Data")['Máximo'])
         with tab4:
             st.subheader(f"Preço Mínimo - {ticker_sel} ({periodo_sel})")
-            st.line_chart(df.set_index("Data")["Mínimo"])
+            st.markdown(preco_atual_html(), unsafe_allow_html=True)
+            st.line_chart(df.set_index("Data")['Mínimo'])
         with tab5:
             st.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
-            st.bar_chart(df.set_index("Data")["Volume"])
+            st.markdown(preco_atual_html(), unsafe_allow_html=True)
+            st.bar_chart(df.set_index("Data")['Volume'])
 
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
