@@ -1,5 +1,6 @@
 from assets.analytics_cache import atualizar_analytics_cache, consultar_analytics_cache
 import threading
+import yfinance as yf
 import streamlit as st
 import pandas as pd
 from assets.analytics_cache import consultar_analytics_cache
@@ -14,37 +15,58 @@ st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
 
 # Thread para atualizar preços dos ativos periodicamente
 def atualizar_precos_periodicamente(intervalo=60):
-    def to_float(val):
-        if val is None:
-            return None
-        if isinstance(val, str):
-            val = val.replace('%', '').replace(',', '').strip()
-        try:
-            return float(val)
-        except Exception:
-            return None
-    scraper = Scraper(headless=True)
     while True:
         ativos = listar_ativos()
         tickers = [a.ticker for a in ativos]
-        try:
-            scraper.start_driver()
-            for ticker in tickers:
-                try:
-                    dados = scraper.scrape_stock(ticker)
-                    salvar_preco_atual(
-                        ticker,
-                        preco=to_float(dados.get("regular_market_price")),
-                        variacao=to_float(dados.get("regular_market_change")),
-                        variacao_percentual=to_float(dados.get("regular_market_change_percent")),
-                        atualizado_em=datetime.datetime.now()
-                    )
-                except Exception:
-                    pass
-            scraper.quit_driver()
-        except Exception:
-            pass
+        for ticker in tickers:
+            try:
+                dados = buscar_preco_com_fallback(ticker)
+                salvar_preco_atual(
+                    ticker,
+                    preco=dados['preco'],
+                    variacao=dados['variacao'],
+                    variacao_percentual=dados['variacao_percentual'],
+                    atualizado_em=datetime.datetime.now()
+                )
+            except Exception:
+                pass
         time.sleep(intervalo)
+
+# Função utilitária para buscar preço com fallback para yfinance
+def buscar_preco_com_fallback(ticker):
+    try:
+        scraper = Scraper(headless=True)
+        scraper.start_driver()
+        dados = scraper.scrape_stock(ticker)
+        scraper.quit_driver()
+        def to_float(val):
+            if val is None:
+                return None
+            if isinstance(val, str):
+                val = val.replace('%', '').replace(',', '.').strip()
+            try:
+                return float(val)
+            except Exception:
+                return None
+        return {
+            'preco': to_float(dados.get("regular_market_price")),
+            'variacao': to_float(dados.get("regular_market_change")),
+            'variacao_percentual': to_float(dados.get("regular_market_change_percent")),
+        }
+    except Exception:
+        try:
+            yf_ticker = yf.Ticker(ticker)
+            info = yf_ticker.info
+            preco = info.get('regularMarketPrice') or info.get('previousClose')
+            variacao = info.get('regularMarketChange') or (preco - info.get('previousClose') if preco and info.get('previousClose') else None)
+            variacao_percentual = info.get('regularMarketChangePercent')
+            return {
+                'preco': preco,
+                'variacao': variacao,
+                'variacao_percentual': variacao_percentual,
+            }
+        except Exception:
+            return {'preco': None, 'variacao': None, 'variacao_percentual': None}
 
 # Inicia thread de atualização (apenas uma vez)
 if 'thread_precos' not in st.session_state:
@@ -99,27 +121,14 @@ with st.sidebar:
                 inserir_ativo(novo_ativo)
                 def buscar_e_salvar_preco():
                     from assets.database import salvar_preco_atual
-                    from assets.scrapping import Scraper
-                    scraper_thread = Scraper(headless=True)
-                    scraper_thread.start_driver()
-                    dados = scraper_thread.scrape_stock(novo_ativo)
-                    def to_float(val):
-                        if val is None:
-                            return None
-                        if isinstance(val, str):
-                            val = val.replace('%', '').replace(',', '.').strip()
-                        try:
-                            return float(val)
-                        except Exception:
-                            return None
+                    dados = buscar_preco_com_fallback(novo_ativo)
                     salvar_preco_atual(
                         novo_ativo,
-                        preco=to_float(dados.get("regular_market_price")),
-                        variacao=to_float(dados.get("regular_market_change")),
-                        variacao_percentual=to_float(dados.get("regular_market_change_percent")),
+                        preco=dados['preco'],
+                        variacao=dados['variacao'],
+                        variacao_percentual=dados['variacao_percentual'],
                         atualizado_em=None
                     )
-                    scraper_thread.quit_driver()
                 # Buscar preço em thread para não travar o front
                 threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
