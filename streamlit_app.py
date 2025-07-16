@@ -53,10 +53,11 @@ if 'thread_precos' not in st.session_state:
     st.session_state['thread_precos'] = True
 
 
-# Título e descrição sempre visíveis
+
+# Título simples
 st.markdown("""
-<h1 style='font-size:2.5rem; color:#0a3d62; margin-bottom:0;'>💹 Dashboard Financeiro Interativo</h1>
-<p style='font-size:1.2rem; color:#222; margin-top:0;'>Acompanhe, compare e explore ativos do mercado financeiro brasileiro em tempo real.<br>Ferramentas de análise, gráficos dinâmicos e gestão de portfólio em um só lugar.</p>
+<h2 style='font-size:2rem; color:#0a3d62; margin-bottom:0.2em;'>💹 Dashboard Financeiro</h2>
+<div style='font-size:1rem; color:#444; margin-bottom:1em;'>Acompanhe preços e destaques do mercado.</div>
 """, unsafe_allow_html=True)
 
 # Sidebar refinada
@@ -165,40 +166,20 @@ with st.sidebar:
 
 # Destaques do Mercado (versão nativa Streamlit)
 
-# Destaques do Mercado (fundo escuro)
-st.markdown("""
-<div style='background: linear-gradient(90deg,#232931 60%,#393e46 100%); border-radius:12px; padding:1.5rem 1rem 1rem 1rem; margin-bottom:2rem;'>
-    <h2 style='color:#f8d90f; margin-bottom:0.5rem;'>✨ Destaques do Mercado</h2>
-</div>
-""", unsafe_allow_html=True)
 
-# Buscar analytics do cache salvo no banco
+# Destaques do Mercado (simples)
+st.markdown("<b>Destaques do Mercado</b>", unsafe_allow_html=True)
 analytics = {a.tipo: a for a in consultar_analytics_cache()}
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.subheader("Maior rentabilidade (12 meses)")
     a = analytics.get('maior_rent_12m')
-    if a and a.ticker:
-        st.success(f"{a.ticker}", icon="⬆️")
-        st.metric("Rentabilidade", f"{a.valor:.2%}")
-    else:
-        st.warning("Sem dados")
+    st.metric("Maior rent. 12m", f"{a.ticker if a and a.ticker else '-'}", f"{a.valor:.2%}" if a and a.valor is not None else "-")
 with col2:
-    st.subheader("Menor rentabilidade (MM 3 meses)")
     a = analytics.get('menor_rent_mm3m')
-    if a and a.ticker:
-        st.error(f"{a.ticker}", icon="⬇️")
-        st.metric("Rentabilidade", f"{a.valor:.2%}")
-    else:
-        st.warning("Sem dados")
+    st.metric("Menor rent. MM3M", f"{a.ticker if a and a.ticker else '-'}", f"{a.valor:.2%}" if a and a.valor is not None else "-")
 with col3:
-    st.subheader("Maior tendência de crescimento (próx. mês)")
     a = analytics.get('maior_tend_1m')
-    if a and a.ticker:
-        st.info(f"{a.ticker}", icon="📈")
-        st.metric("Coeficiente", f"{a.valor:.4f}")
-    else:
-        st.warning("Sem dados")
+    st.metric("Maior tendência 1m", f"{a.ticker if a and a.ticker else '-'}", f"{a.valor:.4f}" if a and a.valor is not None else "-")
 
 st.markdown("---")
 
