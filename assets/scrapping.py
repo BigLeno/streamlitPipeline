@@ -4,7 +4,6 @@
 
 import datetime
 import pandas as pd
-import csv  # (pode remover se não for mais usado)
 import os
 import re
 import time
