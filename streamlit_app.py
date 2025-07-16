@@ -56,6 +56,7 @@ elif st.session_state['mercado_aberto'] != mercado_aberto:
     st.session_state['mercado_aberto'] = mercado_aberto
 
 
+
 # === Exibe status do mercado dos EUA no topo do dashboard ===
 import pytz
 ny_tz = pytz.timezone('America/New_York')
@@ -63,16 +64,39 @@ agora_ny = dt.now(ny_tz)
 hora_str = agora_ny.strftime('%H:%M')
 dia_semana = agora_ny.strftime('%A')
 
+# Calcula tempo restante para fechamento (ou abertura)
+abertura = dttime(9, 30)
+fechamento = dttime(16, 0)
 if mercado_aberto:
+    fechamento_dt = agora_ny.replace(hour=16, minute=0, second=0, microsecond=0)
+    tempo_restante = fechamento_dt - agora_ny
+    if tempo_restante.total_seconds() < 0:
+        tempo_restante_str = "-"
+    else:
+        horas, resto = divmod(int(tempo_restante.total_seconds()), 3600)
+        minutos, _ = divmod(resto, 60)
+        tempo_restante_str = f"Fecha em {horas}h {minutos}min"
     status_str = (
         f"<span style='color:#27ae60;font-weight:bold;'>🟢 Mercado dos EUA ABERTO</span>"
-        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span>"
+        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span> "
+        f"<span style='color:#555;font-size:0.95em;' title='Tempo até o fechamento'>{tempo_restante_str}</span>"
     )
     tooltip = "O mercado está aberto (NYSE/Nasdaq, 9:30-16:00 NY)."
 else:
+    # Calcula tempo até próxima abertura (considerando finais de semana)
+    proxima_abertura = agora_ny.replace(hour=9, minute=30, second=0, microsecond=0)
+    if agora_ny.time() >= fechamento:
+        proxima_abertura += datetime.timedelta(days=1)
+    while proxima_abertura.weekday() >= 5:
+        proxima_abertura += datetime.timedelta(days=1)
+    tempo_restante = proxima_abertura - agora_ny
+    horas, resto = divmod(int(tempo_restante.total_seconds()), 3600)
+    minutos, _ = divmod(resto, 60)
+    tempo_restante_str = f"Abre em {horas}h {minutos}min"
     status_str = (
         f"<span style='color:#c0392b;font-weight:bold;'>🔴 Mercado dos EUA FECHADO</span>"
-        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span>"
+        f"<span style='color:#888;font-size:0.95em;'> ({dia_semana}, {hora_str} NY)</span> "
+        f"<span style='color:#555;font-size:0.95em;' title='Tempo até a abertura'>{tempo_restante_str}</span>"
     )
     tooltip = "O mercado está fechado (NYSE/Nasdaq, 9:30-16:00 NY)."
 
@@ -201,10 +225,7 @@ st.markdown("""
 
 # === Sidebar ===
 with st.sidebar:
-    """
-    Barra lateral de navegação e filtros.
-    Permite alternar entre visualização e gerenciamento de portfólio.
-    """
+   
     st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
     st.markdown("<h2 style='color:#0a3d62;'>Menu</h2>", unsafe_allow_html=True)
     menu = st.radio("Menu de opções", ["Filtros de Visualização", "Gerenciar Portfólio"], index=0, label_visibility="collapsed")
@@ -214,9 +235,7 @@ with st.sidebar:
 
     # === Filtros de Visualização ===
     if menu == "Filtros de Visualização":
-        """
-        Filtros para seleção de ativo e período de análise.
-        """
+        
         st.subheader("Filtros de Visualização")
         periodos = {
             "1 mês": 30,
