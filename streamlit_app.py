@@ -1,5 +1,6 @@
 
 
+
 """
 streamlit_app.py
 ----------------
@@ -7,32 +8,32 @@ Dashboard Financeiro Interativo.
 Módulo principal da aplicação Streamlit para visualização, cadastro e análise de ativos financeiros.
 Utiliza scraping, yfinance, banco de dados local e analytics customizados.
 """
+
 __author__ = "BigLeno"
 __version__ = "1.0"
-
 
 # === Imports ===
-__author__ = "BigLeno"
-__version__ = "1.0"
-
-import streamlit as st
-import pandas as pd
 import threading
-import time
 import datetime
-import yfinance as yf
-
 from datetime import datetime as dt, time as dttime
+import time
+import pandas as pd
+import streamlit as st
+import yfinance as yf
+import pytz
 
-# === Função para verificar se o mercado dos EUA está aberto ===
+from assets.scrapping import Scraper
+from assets.database import (
+    listar_ativos, listar_historicos, inserir_ativo, consultar_preco_atual, salvar_preco_atual, atualizar_analytics_cache, consultar_analytics_cache)
+from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_precos_periodicamente
+
+
 def mercado_eua_aberto() -> bool:
     """
     Verifica se o mercado dos EUA (NYSE/Nasdaq) está aberto agora.
-    Retorna:
+    Returns:
         bool: True se aberto, False se fechado.
     """
-    # Horário de funcionamento NYSE/Nasdaq: 9:30 às 16:00 (horário NY)
-    import pytz
     ny_tz = pytz.timezone('America/New_York')
     agora_ny = dt.now(ny_tz)
     weekday = agora_ny.weekday()
@@ -41,6 +42,7 @@ def mercado_eua_aberto() -> bool:
     abertura = dttime(9, 30)
     fechamento = dttime(16, 0)
     return abertura <= agora_ny.time() <= fechamento
+
 
 # Estado anterior do mercado (para trigger de atualização de analytics)
 if 'mercado_aberto' not in st.session_state:
@@ -58,7 +60,6 @@ elif st.session_state['mercado_aberto'] != mercado_aberto:
 
 
 # === Exibe status do mercado dos EUA no topo do dashboard ===
-import pytz
 ny_tz = pytz.timezone('America/New_York')
 agora_ny = dt.now(ny_tz)
 hora_str = agora_ny.strftime('%H:%M')
@@ -107,26 +108,27 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-from assets.scrapping import Scraper
-from assets.database import (
-    listar_ativos, listar_historicos, inserir_ativo, consultar_preco_atual, salvar_preco_atual, atualizar_analytics_cache, consultar_analytics_cache)
-from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_precos_periodicamente
-
-
 # === Configuração da Página ===
-
 st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
+
 
 
 
 # Função utilitária para buscar preço com fallback para yfinance
 def buscar_preco_com_fallback(ticker):
+    """
+    Busca o preço do ativo usando scraping e faz fallback para yfinance em caso de erro.
+    Args:
+        ticker (str): Ticker do ativo.
+    Returns:
+        dict: Preço, variação e variação percentual.
+    """
     try:
         scraper = Scraper(headless=True)
         scraper.start_driver()
         dados = scraper.scrape_stock(ticker)
         scraper.quit_driver()
-        def to_float(val):
+        def to_float_local(val):
             if val is None:
                 return None
             if isinstance(val, str):
@@ -136,9 +138,9 @@ def buscar_preco_com_fallback(ticker):
             except Exception:
                 return None
         return {
-            'preco': to_float(dados.get("regular_market_price")),
-            'variacao': to_float(dados.get("regular_market_change")),
-            'variacao_percentual': to_float(dados.get("regular_market_change_percent")),
+            'preco': to_float_local(dados.get("regular_market_price")),
+            'variacao': to_float_local(dados.get("regular_market_change")),
+            'variacao_percentual': to_float_local(dados.get("regular_market_change_percent")),
         }
     except Exception:
         try:
@@ -160,10 +162,6 @@ def buscar_e_salvar_preco() -> None:
     Busca o preço do ativo recém-adicionado e salva no banco de dados.
     Executado em thread para não travar o front.
     """
-    """
-    Busca o preço do ativo recém-adicionado e salva no banco de dados.
-    Executado em thread para não travar o front.
-    """
     dados = buscar_preco_com_fallback(novo_ativo)
     salvar_preco_atual(
         novo_ativo,
@@ -177,11 +175,6 @@ def preco_atual_html() -> str:
     """
     Gera HTML com o preço atual, variação e data/hora da última atualização do ativo selecionado.
     Returns:
-        str: HTML formatado para exibição no Streamlit.
-    """
-    """
-    Gera HTML com o preço atual, variação e data/hora da última atualização do ativo selecionado.
-    Retorna:
         str: HTML formatado para exibição no Streamlit.
     """
     preco_obj = consultar_preco_atual(ticker_sel)
@@ -203,8 +196,7 @@ def preco_atual_html() -> str:
             </div>
             <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
         """
-    else:
-        return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
+    return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
 
 
 # === Inicialização da Thread de Preços ===
