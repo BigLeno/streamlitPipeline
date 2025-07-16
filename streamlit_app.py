@@ -28,20 +28,24 @@ def atualizar_precos_periodicamente(intervalo=60):
     scraper = Scraper(headless=True)
     while True:
         ativos = listar_ativos()
-        for ativo in ativos:
-            try:
-                scraper.start_driver()
-                dados = scraper.scrape_stock(ativo.ticker)
-                scraper.quit_driver()
-                salvar_preco_atual(
-                    ativo.ticker,
-                    preco=to_float(dados.get("regular_market_price")),
-                    variacao=to_float(dados.get("regular_market_change")),
-                    variacao_percentual=to_float(dados.get("regular_market_change_percent")),
-                    atualizado_em=datetime.datetime.now()
-                )
-            except Exception as e:
-                pass
+        tickers = [a.ticker for a in ativos]
+        try:
+            scraper.start_driver()
+            for ticker in tickers:
+                try:
+                    dados = scraper.scrape_stock(ticker)
+                    salvar_preco_atual(
+                        ticker,
+                        preco=to_float(dados.get("regular_market_price")),
+                        variacao=to_float(dados.get("regular_market_change")),
+                        variacao_percentual=to_float(dados.get("regular_market_change_percent")),
+                        atualizado_em=datetime.datetime.now()
+                    )
+                except Exception:
+                    pass
+            scraper.quit_driver()
+        except Exception:
+            pass
         time.sleep(intervalo)
 
 # Inicia thread de atualização (apenas uma vez)
@@ -183,42 +187,76 @@ if ticker_sel:
     else:
         data_inicio = hoje - datetime.timedelta(days=dias)
         historicos = [h for h in listar_historicos(ticker_sel) if h.data >= data_inicio and h.preco_fechamento]
-    tab1, tab2, tab3 = st.tabs(["📉 Preço de Fechamento", "📊 Volume", "💲 Preço Atual (ao vivo)"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📉 Fechamento",
+        "📈 Abertura",
+        "🔼 Máximo",
+        "🔽 Mínimo",
+        " Volume"
+    ])
     if not historicos:
         tab1.warning("Não há dados suficientes para plotar o gráfico.")
         tab2.warning("Não há dados suficientes para plotar o gráfico.")
+        tab3.warning("Não há dados suficientes para plotar o gráfico.")
+        tab4.warning("Não há dados suficientes para plotar o gráfico.")
+        tab5.warning("Não há dados suficientes para plotar o gráfico.")
     else:
         historicos.sort(key=lambda h: h.data)
         df = pd.DataFrame({
             "Data": [h.data for h in historicos],
+            "Abertura": [h.preco_abertura for h in historicos],
             "Fechamento": [h.preco_fechamento for h in historicos],
+            "Máximo": [h.maximo for h in historicos],
+            "Mínimo": [h.minimo for h in historicos],
             "Volume": [h.volume for h in historicos]
         })
+
+        # Preço Atual sempre acima dos gráficos
+        def to_float(val):
+            if val is None:
+                return None
+            if isinstance(val, str):
+                val = val.replace('%', '').replace(',', '').strip()
+            try:
+                return float(val)
+            except Exception:
+                return None
+        preco_obj = consultar_preco_atual(ticker_sel)
+        if preco_obj:
+            preco = to_float(preco_obj.preco)
+            variacao = to_float(preco_obj.variacao)
+            variacao_pct = to_float(preco_obj.variacao_percentual)
+            cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
+            variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
+            variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
+            st.markdown(f"""
+                <div style='display:flex;align-items:center;justify-content:space-between;'>
+                  <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
+                    {preco if preco is not None else '-'}
+                  </span>
+                  <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
+                    {variacao_str} {variacao_pct_str}
+                  </span>
+                </div>
+                <div style='font-size:0.9rem;color:#888;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Aguardando atualização automática do preço...")
+
         with tab1:
             st.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
             st.line_chart(df.set_index("Data")["Fechamento"])
         with tab2:
+            st.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
+            st.line_chart(df.set_index("Data")["Abertura"])
+        with tab3:
+            st.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
+            st.line_chart(df.set_index("Data")["Máximo"])
+        with tab4:
+            st.subheader(f"Preço Mínimo - {ticker_sel} ({periodo_sel})")
+            st.line_chart(df.set_index("Data")["Mínimo"])
+        with tab5:
             st.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
             st.bar_chart(df.set_index("Data")["Volume"])
-    # Preço atual ao vivo
-        with tab3:
-            st.subheader(f"Preço Atual de {ticker_sel} (atualização automática)")
-            def to_float(val):
-                if val is None:
-                    return None
-                if isinstance(val, str):
-                    val = val.replace('%', '').replace(',', '').strip()
-                try:
-                    return float(val)
-                except Exception:
-                    return None
-            preco_obj = consultar_preco_atual(ticker_sel)
-            if preco_obj:
-                st.metric("Preço Atual", preco_obj.preco)
-                st.metric("Variação", preco_obj.variacao)
-                st.metric("Variação (%)", preco_obj.variacao_percentual)
-                st.caption(f"Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}")
-            else:
-                st.info("Aguardando atualização automática do preço...")
 
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
