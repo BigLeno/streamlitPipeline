@@ -66,10 +66,23 @@ st.markdown("""
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
     st.markdown("<h2 style='color:#0a3d62;'>Menu</h2>", unsafe_allow_html=True)
-    menu = st.radio("Menu de opções", ["Gerenciar Portfólio", "Filtros de Visualização", "Atualizar Banco"], index=0, label_visibility="collapsed")
+    menu = st.radio("Menu de opções", ["Filtros de Visualização", "Gerenciar Portfólio"], index=0, label_visibility="collapsed")
     scraper = Scraper(headless=True)
     ativos = listar_ativos()
     tickers = [a.ticker for a in ativos]
+
+    # Filtros de Visualização sempre visíveis e primeiro
+    st.subheader("Filtros de Visualização")
+    periodos = {
+        "1 mês": 30,
+        "3 meses": 90,
+        "6 meses": 180,
+        "1 ano": 365,
+        "5 anos": 5*365
+    }
+    ticker_sel = st.selectbox("Selecione o ativo", tickers, key="ticker_sel")
+    periodo_sel = st.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
+    dias = periodos[periodo_sel]
 
     if menu == "Gerenciar Portfólio":
         st.subheader("Adicionar novo ativo")
@@ -106,26 +119,7 @@ with st.sidebar:
         st.markdown("---")
 
 
-    elif menu == "Filtros de Visualização":
-        st.subheader("Filtros de Visualização")
-        periodos = {
-            "1 mês": 30,
-            "3 meses": 90,
-            "6 meses": 180,
-            "1 ano": 365,
-            "5 anos": 5*365
-        }
-        ticker_sel = st.selectbox("Selecione o ativo", tickers, key="ticker_sel")
-        periodo_sel = st.selectbox("Período", list(periodos.keys()), index=1, key="periodo_sel")
-        dias = periodos[periodo_sel]
-        # Não atribuir manualmente ao session_state, Streamlit já faz isso
 
-    elif menu == "Atualizar Banco":
-        st.subheader("Atualizar banco de dados")
-        if st.button("🔄 Atualizar banco (coletar históricos)"):
-            with st.spinner("Coletando históricos de todos os ativos..."):
-                scraper.coletar_e_salvar_historico_ativos([a.ticker for a in listar_ativos()], periodos='5Y')
-            st.success("Banco atualizado!")
 
     # Valores padrão para visualização
     if 'ticker_sel' not in st.session_state:
@@ -188,11 +182,11 @@ if ticker_sel:
         data_inicio = hoje - datetime.timedelta(days=dias)
         historicos = [h for h in listar_historicos(ticker_sel) if h.data >= data_inicio and h.preco_fechamento]
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📉 Fechamento",
-        "📈 Abertura",
+        "� Abertura",
+        "� Fechamento",
         "🔼 Máximo",
         "🔽 Mínimo",
-        " Volume"
+        "📊 Volume"
     ])
     if not historicos:
         tab1.warning("Não há dados suficientes para plotar o gráfico.")
@@ -211,7 +205,7 @@ if ticker_sel:
             "Volume": [h.volume for h in historicos]
         })
 
-        # Preço Atual sempre acima dos gráficos
+        # Preço Atual sempre acima do título do gráfico
         def to_float(val):
             if val is None:
                 return None
@@ -230,7 +224,7 @@ if ticker_sel:
             variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
             variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
             st.markdown(f"""
-                <div style='display:flex;align-items:center;justify-content:space-between;'>
+                <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
                   <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
                     {preco if preco is not None else '-'}
                   </span>
@@ -238,17 +232,17 @@ if ticker_sel:
                     {variacao_str} {variacao_pct_str}
                   </span>
                 </div>
-                <div style='font-size:0.9rem;color:#888;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
+                <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
             """, unsafe_allow_html=True)
         else:
             st.info("Aguardando atualização automática do preço...")
 
         with tab1:
-            st.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
-            st.line_chart(df.set_index("Data")["Fechamento"])
-        with tab2:
             st.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
             st.line_chart(df.set_index("Data")["Abertura"])
+        with tab2:
+            st.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
+            st.line_chart(df.set_index("Data")["Fechamento"])
         with tab3:
             st.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
             st.line_chart(df.set_index("Data")["Máximo"])
