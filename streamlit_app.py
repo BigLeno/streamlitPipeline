@@ -398,4 +398,117 @@ if ticker_sel:
         fig_volume.update_layout(xaxis_title="Data", yaxis_title="Volume", margin=dict(l=10, r=10, t=30, b=10))
         tab5.plotly_chart(fig_volume, use_container_width=True)
 
+        # === Novas Abas de Análises Avançadas ===
+        st.markdown("<b>Análises Avançadas</b>", unsafe_allow_html=True)
+        adv_tab1, adv_tab2, adv_tab3, adv_tab4, adv_tab5, adv_tab6, adv_tab7 = st.tabs([
+            "Retorno Acumulado",
+            "Volatilidade",
+            "Drawdown",
+            "Médias Móveis",
+            "RSI & MACD",
+            "Correlação",
+            "Heatmap Retornos"
+        ])
+
+        # 1. Retorno Acumulado
+        df["Retorno"] = df["Fechamento"].pct_change()
+        df["Retorno Acumulado"] = (1 + df["Retorno"]).cumprod() - 1
+        fig_ret_acum = go.Figure()
+        fig_ret_acum.add_trace(go.Scatter(x=df["Data"], y=df["Retorno Acumulado"]*100, mode="lines", name="Retorno Acumulado", line=dict(color="#0a3d62")))
+        fig_ret_acum.update_layout(xaxis_title="Data", yaxis_title="% Acumulado", margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab1.subheader("Retorno Acumulado")
+        adv_tab1.plotly_chart(fig_ret_acum, use_container_width=True)
+
+        # 2. Volatilidade (rolling std 21d)
+        df["Volatilidade"] = df["Retorno"].rolling(window=21).std() * (252**0.5)
+        fig_vol = go.Figure()
+        fig_vol.add_trace(go.Scatter(x=df["Data"], y=df["Volatilidade"]*100, mode="lines", name="Volatilidade 21d", line=dict(color="#e67e22")))
+        fig_vol.update_layout(xaxis_title="Data", yaxis_title="Volatilidade (%)", margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab2.subheader("Volatilidade (21 dias, anualizada)")
+        adv_tab2.plotly_chart(fig_vol, use_container_width=True)
+
+        # 3. Drawdown
+        df["Acum"] = (1 + df["Retorno"]).cumprod()
+        df["Max Acum"] = df["Acum"].cummax()
+        df["Drawdown"] = df["Acum"] / df["Max Acum"] - 1
+        fig_dd = go.Figure()
+        fig_dd.add_trace(go.Scatter(x=df["Data"], y=df["Drawdown"]*100, mode="lines", name="Drawdown", line=dict(color="#c0392b")))
+        fig_dd.update_layout(xaxis_title="Data", yaxis_title="Drawdown (%)", margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab3.subheader("Drawdown Máximo")
+        adv_tab3.plotly_chart(fig_dd, use_container_width=True)
+
+        # 4. Médias Móveis
+        df["MM Curta"] = df["Fechamento"].rolling(window=21).mean()
+        df["MM Longa"] = df["Fechamento"].rolling(window=63).mean()
+        fig_mm = go.Figure()
+        fig_mm.add_trace(go.Scatter(x=df["Data"], y=df["Fechamento"], mode="lines", name="Fechamento", line=dict(color="#888")))
+        fig_mm.add_trace(go.Scatter(x=df["Data"], y=df["MM Curta"], mode="lines", name="MM 21d", line=dict(color="#27ae60")))
+        fig_mm.add_trace(go.Scatter(x=df["Data"], y=df["MM Longa"], mode="lines", name="MM 63d", line=dict(color="#0a3d62")))
+        fig_mm.update_layout(xaxis_title="Data", yaxis_title="Preço", margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab4.subheader("Médias Móveis (21d e 63d)")
+        adv_tab4.plotly_chart(fig_mm, use_container_width=True)
+
+        # 5. RSI & MACD
+        # RSI
+        delta = df["Fechamento"].diff()
+        up = delta.clip(lower=0)
+        down = -delta.clip(upper=0)
+        roll_up = up.rolling(14).mean()
+        roll_down = down.rolling(14).mean()
+        rs = roll_up / roll_down
+        df["RSI"] = 100 - (100 / (1 + rs))
+        # MACD
+        ema12 = df["Fechamento"].ewm(span=12, adjust=False).mean()
+        ema26 = df["Fechamento"].ewm(span=26, adjust=False).mean()
+        macd = ema12 - ema26
+        signal = macd.ewm(span=9, adjust=False).mean()
+        fig_rsi = go.Figure()
+        fig_rsi.add_trace(go.Scatter(x=df["Data"], y=df["RSI"], mode="lines", name="RSI", line=dict(color="#e67e22")))
+        fig_rsi.update_layout(xaxis_title="Data", yaxis_title="RSI", margin=dict(l=10, r=10, t=30, b=10), yaxis=dict(range=[0,100]))
+        fig_macd = go.Figure()
+        fig_macd.add_trace(go.Scatter(x=df["Data"], y=macd, mode="lines", name="MACD", line=dict(color="#0a3d62")))
+        fig_macd.add_trace(go.Scatter(x=df["Data"], y=signal, mode="lines", name="Signal", line=dict(color="#c0392b")))
+        fig_macd.update_layout(xaxis_title="Data", yaxis_title="MACD", margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab5.subheader("RSI (14) e MACD")
+        adv_tab5.plotly_chart(fig_rsi, use_container_width=True)
+        adv_tab5.plotly_chart(fig_macd, use_container_width=True)
+
+        # 6. Correlação entre ativos (heatmap)
+        ativos_corr = listar_ativos()
+        tickers_corr = [a.ticker for a in ativos_corr]
+        if len(tickers_corr) > 1:
+            dfs_corr = []
+            for t in tickers_corr:
+                hist = [h for h in listar_historicos(t) if h.preco_fechamento]
+                if len(hist) > 0:
+                    dft = pd.DataFrame({
+                        "Data": [h.data for h in hist],
+                        t: [h.preco_fechamento for h in hist]
+                    })
+                    dft = dft.set_index("Data")
+                    dfs_corr.append(dft)
+            if dfs_corr:
+                df_corr = pd.concat(dfs_corr, axis=1, join="inner").sort_index()
+                df_corr_ret = df_corr.pct_change().dropna()
+                corr = df_corr_ret.corr()
+                import plotly.figure_factory as ff
+                fig_corr = ff.create_annotated_heatmap(z=corr.values, x=list(corr.columns), y=list(corr.index), colorscale="blues", showscale=True)
+                adv_tab6.subheader("Correlação entre Ativos (Retornos)")
+                adv_tab6.plotly_chart(fig_corr, use_container_width=True)
+            else:
+                adv_tab6.info("Adicione mais de um ativo para visualizar a correlação.")
+        else:
+            adv_tab6.info("Adicione mais de um ativo para visualizar a correlação.")
+
+        # 7. Heatmap de Retornos Mensais
+        df["Ano"] = df["Data"].apply(lambda x: x.year)
+        df["Mes"] = df["Data"].apply(lambda x: x.month)
+        df["Retorno Mensal"] = df.groupby(["Ano", "Mes"])["Fechamento"].transform(lambda x: x.iloc[-1] / x.iloc[0] - 1)
+        pivot = df.drop_duplicates(["Ano", "Mes"])[["Ano", "Mes", "Retorno Mensal"]].pivot(index="Ano", columns="Mes", values="Retorno Mensal")
+        import numpy as np
+        import plotly.express as px
+        fig_heat = px.imshow(pivot*100, labels=dict(x="Mês", y="Ano", color="Retorno (%)"), x=[str(m) for m in pivot.columns], y=[str(a) for a in pivot.index], color_continuous_scale="RdYlGn", aspect="auto", text_auto=True)
+        fig_heat.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+        adv_tab7.subheader("Heatmap de Retornos Mensais")
+        adv_tab7.plotly_chart(fig_heat, use_container_width=True)
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
