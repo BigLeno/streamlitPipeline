@@ -126,9 +126,9 @@ class Scraper:
         return stock
 
     def scrape_historical_data(self, ticker_symbol, days=None, data_inicial=None, data_final=None):
-        """Extrai dados históricos do Yahoo Finance para o ticker informado.
-        days: número máximo de linhas (ignorado se datas forem passadas)
-        data_inicial/data_final: strings 'YYYY-MM-DD' para montar a URL com period1/period2
+        """
+        Extrai dados históricos do Yahoo Finance para o ticker informado.
+        Remove linhas de dividendos/splits e trata intervalos sem dados.
         """
         if data_inicial and data_final:
             period1 = self._date_to_unix(data_inicial)
@@ -149,26 +149,39 @@ class Scraper:
             for match in re.finditer(padrao_linha, html):
                 linha_html = match.group(0)
                 colunas = padrao_coluna.findall(linha_html)
+                # Remove linhas de dividendos/splits: geralmente possuem texto como 'Dividend' ou 'Split' em alguma coluna
+                if any('Dividend' in c or 'Split' in c for c in colunas):
+                    continue
                 if len(colunas) >= 7:
                     dados.append([re.sub('<.*?>', '', c).replace('\n', '').strip() for c in colunas[:7]])
                 if days is not None and data_inicial is None and len(dados) >= days:
                     break
+            if not dados:
+                print(f"[AVISO] Nenhum dado encontrado para {ticker_symbol} no intervalo solicitado.")
+                return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
+
             df = pd.DataFrame(dados, columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
 
             # Garante que o dado do dia atual esteja presente
             hoje = datetime.datetime.now().strftime('%b %d, %Y')
             if not (df['Date'] == hoje).any():
-                stock = self.scrape_stock(ticker_symbol)
-                nova_linha = {
-                    "Date": hoje,
-                    "Open": stock.get("open_value", ""),
-                    "High": stock.get("regular_market_price", ""),
-                    "Low": stock.get("regular_market_price", ""),
-                    "Close*": stock.get("regular_market_price", ""),
-                    "Adj Close**": stock.get("regular_market_price", ""),
-                    "Volume": stock.get("volume", "")
-                }
-                df = pd.concat([pd.DataFrame([nova_linha]), df], ignore_index=True)
+                try:
+                    stock = self.scrape_stock(ticker_symbol)
+                    nova_linha = {
+                        "Date": hoje,
+                        "Open": stock.get("open_value", ""),
+                        "High": stock.get("regular_market_price", ""),
+                        "Low": stock.get("regular_market_price", ""),
+                        "Close*": stock.get("regular_market_price", ""),
+                        "Adj Close**": stock.get("regular_market_price", ""),
+                        "Volume": stock.get("volume", "")
+                    }
+                    df = pd.concat([pd.DataFrame([nova_linha]), df], ignore_index=True)
+                except Exception as e:
+                    print(f"[AVISO] Não foi possível adicionar linha do dia atual para {ticker_symbol}: {e}")
+
+            # Remove linhas duplicadas por data (mantém a primeira ocorrência)
+            df = df.drop_duplicates(subset=["Date"], keep="first").reset_index(drop=True)
 
             df.to_csv(f"historical_{ticker_symbol}.csv", index=False)
             return df
