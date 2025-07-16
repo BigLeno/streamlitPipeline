@@ -272,13 +272,18 @@ with st.sidebar:
             elif novo_ativo in tickers:
                 st.error(f"O ativo {novo_ativo} já existe!")
             else:
-                inserir_ativo(novo_ativo)
-                threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
-                with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
-                    Scraper(headless=True).coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
-                threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
-                st.success(f"Ativo {novo_ativo} adicionado e históricos coletados!")
-                st.rerun()
+                # Validação do ticker: só permite se realmente existir
+                dados = buscar_preco_com_fallback(novo_ativo)
+                if dados['preco'] is None:
+                    st.error(f"Ticker '{novo_ativo}' não encontrado ou não possui dados válidos. Verifique o código e tente novamente.")
+                else:
+                    inserir_ativo(novo_ativo)
+                    threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
+                    with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
+                        Scraper(headless=True).coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
+                    threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
+                    st.success(f"Ativo {novo_ativo} adicionado e históricos coletados!")
+                    st.rerun()
         st.subheader("Remover ativo")
         if tickers:
             remover_ativo = st.selectbox("Selecione para remover", tickers, key="remover_ativo")
