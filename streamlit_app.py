@@ -27,6 +27,18 @@ from assets.database import (
     listar_ativos, listar_historicos, inserir_ativo, consultar_preco_atual, salvar_preco_atual, atualizar_analytics_cache, consultar_analytics_cache)
 from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_precos_periodicamente
 
+def atualizar_todos_historicos():
+    Scraper(headless=True).coletar_e_salvar_historico_ativos(tickers_atualizar, periodos='5Y')
+    
+def to_float_local(val):
+    if val is None:
+        return None
+    if isinstance(val, str):
+        val = val.replace('%', '').replace(',', '.').strip()
+    try:
+        return float(val)
+    except Exception:
+        return None
 
 def mercado_eua_aberto() -> bool:
     """
@@ -48,13 +60,18 @@ def mercado_eua_aberto() -> bool:
 if 'mercado_aberto' not in st.session_state:
     st.session_state['mercado_aberto'] = None
 
-# Checa status do mercado e atualiza analytics se mudou
+
+# Checa status do mercado e atualiza analytics/históricos se mudou
 mercado_aberto = mercado_eua_aberto()
 if st.session_state['mercado_aberto'] is None:
     st.session_state['mercado_aberto'] = mercado_aberto
 elif st.session_state['mercado_aberto'] != mercado_aberto:
     # Mudou o status: reprocessa analytics
     atualizar_analytics_cache()
+    # Se acabou de fechar, atualiza históricos de todos os ativos
+    if st.session_state['mercado_aberto'] and not mercado_aberto:
+        tickers_atualizar = [a.ticker for a in listar_ativos()]
+        threading.Thread(target=atualizar_todos_historicos, daemon=True).start()
     st.session_state['mercado_aberto'] = mercado_aberto
 
 
@@ -128,15 +145,7 @@ def buscar_preco_com_fallback(ticker):
         scraper.start_driver()
         dados = scraper.scrape_stock(ticker)
         scraper.quit_driver()
-        def to_float_local(val):
-            if val is None:
-                return None
-            if isinstance(val, str):
-                val = val.replace('%', '').replace(',', '.').strip()
-            try:
-                return float(val)
-            except Exception:
-                return None
+        
         return {
             'preco': to_float_local(dados.get("regular_market_price")),
             'variacao': to_float_local(dados.get("regular_market_change")),
