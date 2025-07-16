@@ -1,5 +1,15 @@
 
+"""
+Dashboard Financeiro Interativo
+--------------------------------
+Módulo principal da aplicação Streamlit para visualização, cadastro e análise de ativos financeiros.
+Utiliza scraping, yfinance, banco de dados local e analytics customizados.
+"""
+
 # === Imports ===
+__author__ = "BigLeno"
+__version__ = "1.0"
+
 import streamlit as st
 import pandas as pd
 import threading
@@ -15,7 +25,9 @@ from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_
 
 
 # === Configuração da Página ===
+
 st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
+
 
 
 # Função utilitária para buscar preço com fallback para yfinance
@@ -54,6 +66,48 @@ def buscar_preco_com_fallback(ticker):
         except Exception:
             return {'preco': None, 'variacao': None, 'variacao_percentual': None}
 
+def buscar_e_salvar_preco() -> None:
+    """
+    Busca o preço do ativo recém-adicionado e salva no banco de dados.
+    Executado em thread para não travar o front.
+    """
+    dados = buscar_preco_com_fallback(novo_ativo)
+    salvar_preco_atual(
+        novo_ativo,
+        preco=dados['preco'],
+        variacao=dados['variacao'],
+        variacao_percentual=dados['variacao_percentual'],
+        atualizado_em=None
+    )
+        
+def preco_atual_html() -> str:
+    """
+    Gera HTML com o preço atual, variação e data/hora da última atualização do ativo selecionado.
+    Retorna:
+        str: HTML formatado para exibição no Streamlit.
+    """
+    preco_obj = consultar_preco_atual(ticker_sel)
+    if preco_obj:
+        preco = to_float(preco_obj.preco)
+        variacao = to_float(preco_obj.variacao)
+        variacao_pct = to_float(preco_obj.variacao_percentual)
+        cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
+        variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
+        variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
+        return f"""
+            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
+                <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
+                {preco if preco is not None else '-'}
+                </span>
+                <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
+                {variacao_str} {variacao_pct_str}
+                </span>
+            </div>
+            <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
+        """
+    else:
+        return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
+
 
 # === Inicialização da Thread de Preços ===
 if 'thread_precos' not in st.session_state:
@@ -73,6 +127,10 @@ st.markdown("""
 
 # === Sidebar ===
 with st.sidebar:
+    """
+    Barra lateral de navegação e filtros.
+    Permite alternar entre visualização e gerenciamento de portfólio.
+    """
     st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
     st.markdown("<h2 style='color:#0a3d62;'>Menu</h2>", unsafe_allow_html=True)
     menu = st.radio("Menu de opções", ["Filtros de Visualização", "Gerenciar Portfólio"], index=0, label_visibility="collapsed")
@@ -82,6 +140,9 @@ with st.sidebar:
 
     # === Filtros de Visualização ===
     if menu == "Filtros de Visualização":
+        """
+        Filtros para seleção de ativo e período de análise.
+        """
         st.subheader("Filtros de Visualização")
         periodos = {
             "1 mês": 30,
@@ -101,6 +162,9 @@ with st.sidebar:
 
     # === Gerenciar Portfólio ===
     if menu == "Gerenciar Portfólio":
+        """
+        Permite adicionar e remover ativos do portfólio.
+        """
         st.subheader("Adicionar novo ativo")
         novo_ativo = st.text_input("Ticker (ex: BBDC4.SA)", key="novo_ativo")
         if st.button("➕ Adicionar ativo"):
@@ -110,15 +174,6 @@ with st.sidebar:
                 st.error(f"O ativo {novo_ativo} já existe!")
             else:
                 inserir_ativo(novo_ativo)
-                def buscar_e_salvar_preco():
-                    dados = buscar_preco_com_fallback(novo_ativo)
-                    salvar_preco_atual(
-                        novo_ativo,
-                        preco=dados['preco'],
-                        variacao=dados['variacao'],
-                        variacao_percentual=dados['variacao_percentual'],
-                        atualizado_em=None
-                    )
                 threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
                     Scraper(headless=True).coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
@@ -208,29 +263,6 @@ if ticker_sel:
             "Mínimo": [h.minimo for h in historicos],
             "Volume": [h.volume for h in historicos]
         })
-
-        def preco_atual_html():
-            preco_obj = consultar_preco_atual(ticker_sel)
-            if preco_obj:
-                preco = to_float(preco_obj.preco)
-                variacao = to_float(preco_obj.variacao)
-                variacao_pct = to_float(preco_obj.variacao_percentual)
-                cor = "#27ae60" if variacao is not None and variacao >= 0 else "#c0392b"
-                variacao_str = f"{variacao:+.2f}" if variacao is not None else "-"
-                variacao_pct_str = f"({variacao_pct:+.2f}%)" if variacao_pct is not None else ""
-                return f"""
-                    <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;'>
-                      <span style='font-size:2.2rem;font-weight:bold;color:#222;'>
-                        {preco if preco is not None else '-'}
-                      </span>
-                      <span style='font-size:1.3rem;font-weight:bold;color:{cor};margin-left:1.5rem;'>
-                        {variacao_str} {variacao_pct_str}
-                      </span>
-                    </div>
-                    <div style='font-size:0.9rem;color:#888;margin-bottom:0.5rem;'>Atualizado em: {preco_obj.atualizado_em.strftime('%d/%m/%Y %H:%M:%S')}</div>
-                """
-            else:
-                return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
 
         tab1.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
         tab1.markdown(preco_atual_html(), unsafe_allow_html=True)
