@@ -261,9 +261,7 @@ with st.sidebar:
 
     # === Gerenciar Portfólio ===
     if menu == "Gerenciar Portfólio":
-        """
-        Permite adicionar e remover ativos do portfólio.
-        """
+        
         st.subheader("Adicionar novo ativo")
         novo_ativo = st.text_input("Ticker (ex: BBDC4.SA)", key="novo_ativo")
         if st.button("➕ Adicionar ativo"):
