@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common import TimeoutException
 
-from assets.models import criar_banco, inserir_ativo, inserir_historico
+from assets.database import criar_banco, inserir_ativo, inserir_historico
 
 
 
