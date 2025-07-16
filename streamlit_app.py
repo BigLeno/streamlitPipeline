@@ -29,7 +29,7 @@ from assets.database import (
 from assets.finance_utils import to_float, buscar_preco_com_fallback, atualizar_precos_periodicamente
 
 def atualizar_todos_historicos():
-    Scraper(headless=True).coletar_e_salvar_historico_ativos(tickers_atualizar, periodos='5Y')
+    Scraper(headless=True).coletar_e_salvar_historico_ativos(tickers_atualizar, periodos='5d')
     
 def to_float_local(val):
     if val is None:
