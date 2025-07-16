@@ -17,9 +17,51 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common import TimeoutException
 
+from assets.models import criar_banco, inserir_ativo, inserir_historico
+
 
 
 class Scraper:
+
+    def coletar_e_salvar_historico_ativos(self, ativos: list, periodos=None):
+        """
+        Coleta e salva no banco o histórico dos ativos e períodos informados.
+        """
+        criar_banco()
+        self.start_driver()
+        if periodos is None:
+            periodos = list(self.PERIODOS.keys())
+        for ticker in ativos:
+            inserir_ativo(ticker)
+            print(f'Coletando histórico de {ticker}...')
+            for periodo in periodos:
+                df = self.scrape_historical_data(ticker_symbol=ticker, days=None, data_inicial=None, data_final=None)
+                for _, row in df.iterrows():
+                    try:
+                        data = row['Date']
+                        if isinstance(data, str):
+                            try:
+                                data = datetime.datetime.strptime(data, '%d/%m/%Y').date()
+                            except ValueError:
+                                try:
+                                    data = datetime.datetime.strptime(data, '%b %d, %Y').date()
+                                except ValueError:
+                                    raise ValueError(f"Formato de data não reconhecido: {data}")
+                        if not isinstance(data, datetime.date):
+                            raise ValueError(f"Data não é datetime.date: {data}")
+                        inserir_historico(
+                            ticker=ticker,
+                            data=data,
+                            preco_abertura=float(row['Open']) if row.get('Open') not in [None, '', 'N/A'] else None,
+                            preco_fechamento=float(row['Close*']) if row.get('Close*') not in [None, '', 'N/A'] else None,
+                            maximo=float(row['High']) if row.get('High') not in [None, '', 'N/A'] else None,
+                            minimo=float(row['Low']) if row.get('Low') not in [None, '', 'N/A'] else None,
+                            volume=float(row['Volume'].replace('.', '').replace(',', '')) if row.get('Volume') not in [None, '', 'N/A'] else None
+                        )
+                    except Exception as e:
+                        print(f'Erro ao inserir linha: {row} - {e}')
+            print(f'Histórico de {ticker} inserido no banco.')
+        self.quit_driver()
     PERIODOS = {
         '1D': lambda hoje: (hoje - datetime.timedelta(days=1), hoje),
         '5D': lambda hoje: (hoje - datetime.timedelta(days=5), hoje),
