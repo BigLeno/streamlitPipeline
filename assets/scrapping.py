@@ -4,7 +4,7 @@
 
 import datetime
 import pandas as pd
-import csv
+import csv  # (pode remover se não for mais usado)
 import os
 import re
 import time
@@ -23,19 +23,45 @@ from assets.database import criar_banco, inserir_ativo, inserir_historico
 
 class Scraper:
 
-    def coletar_e_salvar_historico_ativos(self, ativos: list, periodos=None):
+    @staticmethod
+    def get_period_range(periodo: str, hoje: datetime.date = None):
         """
-        Coleta e salva no banco o histórico dos ativos e períodos informados.
+        Retorna a tupla (data_inicial, data_final) para o período informado.
+        """
+        if hoje is None:
+            hoje = datetime.date.today()
+        periodos = {
+            '1D': lambda h: (h - datetime.timedelta(days=1), h),
+            '5D': lambda h: (h - datetime.timedelta(days=5), h),
+            '3M': lambda h: (h - datetime.timedelta(days=90), h),
+            '6M': lambda h: (h - datetime.timedelta(days=180), h),
+            'YTD': lambda h: (h.replace(month=1, day=1), h),
+            '1Y': lambda h: (h - datetime.timedelta(days=365), h),
+            '5Y': lambda h: (h - datetime.timedelta(days=5*365), h),
+        }
+        if periodo not in periodos:
+            raise ValueError(f"Período '{periodo}' não reconhecido.")
+        return periodos[periodo](hoje)
+
+    def coletar_e_salvar_historico_ativos(self, ativos: list, periodos='5Y'):
+        """
+        Coleta e salva no banco o histórico dos ativos para o(s) período(s) informado(s). Não salva CSV.
         """
         criar_banco()
         self.start_driver()
-        if periodos is None:
-            periodos = list(self.PERIODOS.keys())
+        if isinstance(periodos, str):
+            periodos = [periodos]
+        hoje = datetime.date.today()
         for ticker in ativos:
             inserir_ativo(ticker)
-            print(f'Coletando histórico de {ticker}...')
             for periodo in periodos:
-                df = self.scrape_historical_data(ticker_symbol=ticker, days=None, data_inicial=None, data_final=None)
+                data_inicial, data_final = self.get_period_range(periodo, hoje)
+                print(f'Coletando histórico de {ticker} ({periodo})...')
+                df = self.scrape_historical_data(
+                    ticker_symbol=ticker,
+                    data_inicial=self._date_to_str(data_inicial),
+                    data_final=self._date_to_str(data_final)
+                )
                 for _, row in df.iterrows():
                     try:
                         data = row['Date']
@@ -52,15 +78,15 @@ class Scraper:
                         inserir_historico(
                             ticker=ticker,
                             data=data,
-                            preco_abertura=float(row['Open']) if row.get('Open') not in [None, '', 'N/A'] else None,
-                            preco_fechamento=float(row['Close*']) if row.get('Close*') not in [None, '', 'N/A'] else None,
-                            maximo=float(row['High']) if row.get('High') not in [None, '', 'N/A'] else None,
-                            minimo=float(row['Low']) if row.get('Low') not in [None, '', 'N/A'] else None,
-                            volume=float(row['Volume'].replace('.', '').replace(',', '')) if row.get('Volume') not in [None, '', 'N/A'] else None
+                        preco_abertura=float(row['Open']) if row.get('Open') not in [None, '', 'N/A', '-'] else None,
+                        preco_fechamento=float(row['Close*']) if row.get('Close*') not in [None, '', 'N/A', '-'] else None,
+                        maximo=float(row['High']) if row.get('High') not in [None, '', 'N/A', '-'] else None,
+                        minimo=float(row['Low']) if row.get('Low') not in [None, '', 'N/A', '-'] else None,
+                        volume=float(row['Volume'].replace('.', '').replace(',', '')) if row.get('Volume') not in [None, '', 'N/A', '-'] else None
                         )
                     except Exception as e:
                         print(f'Erro ao inserir linha: {row} - {e}')
-            print(f'Histórico de {ticker} inserido no banco.')
+                print(f'Histórico de {ticker} inserido no banco.')
         self.quit_driver()
     PERIODOS = {
         '1D': lambda hoje: (hoje - datetime.timedelta(days=1), hoje),
@@ -229,7 +255,6 @@ class Scraper:
             df.replace({'': 'N/A', None: 'N/A'}, inplace=True)
             self._add_today_if_missing(df, ticker_symbol)
             df = df.drop_duplicates(subset=["Date"], keep="first").reset_index(drop=True)
-            df.to_csv(f"historical_{ticker_symbol}.csv", index=False)
             return df
         except Exception as e:
             print(f"[ERRO] Não foi possível extrair histórico de {ticker_symbol}: {e}")
