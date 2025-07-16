@@ -18,6 +18,7 @@ import datetime
 from datetime import datetime as dt, time as dttime
 import time
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 import pytz
@@ -364,18 +365,37 @@ if ticker_sel:
 
         tab1.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
         tab1.markdown(preco_atual_html(), unsafe_allow_html=True)
-        tab1.line_chart(df.set_index("Data")['Abertura'])
+        fig_abertura = go.Figure()
+        fig_abertura.add_trace(go.Scatter(x=df["Data"], y=df["Abertura"], mode="lines", name="Abertura", line=dict(color="#0a3d62")))
+        fig_abertura.update_layout(xaxis_title="Data", yaxis_title="Preço", margin=dict(l=10, r=10, t=30, b=10))
+        tab1.plotly_chart(fig_abertura, use_container_width=True)
+
         tab2.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
         tab2.markdown(preco_atual_html(), unsafe_allow_html=True)
-        tab2.line_chart(df.set_index("Data")['Fechamento'])
+        fig_fechamento = go.Figure()
+        fig_fechamento.add_trace(go.Scatter(x=df["Data"], y=df["Fechamento"], mode="lines", name="Fechamento", line=dict(color="#27ae60")))
+        fig_fechamento.update_layout(xaxis_title="Data", yaxis_title="Preço", margin=dict(l=10, r=10, t=30, b=10))
+        tab2.plotly_chart(fig_fechamento, use_container_width=True)
+
         tab3.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
         tab3.markdown(preco_atual_html(), unsafe_allow_html=True)
-        tab3.line_chart(df.set_index("Data")['Máximo'])
+        fig_maximo = go.Figure()
+        fig_maximo.add_trace(go.Scatter(x=df["Data"], y=df["Máximo"], mode="lines", name="Máximo", line=dict(color="#e67e22")))
+        fig_maximo.update_layout(xaxis_title="Data", yaxis_title="Preço", margin=dict(l=10, r=10, t=30, b=10))
+        tab3.plotly_chart(fig_maximo, use_container_width=True)
+
         tab4.subheader(f"Preço Mínimo - {ticker_sel} ({periodo_sel})")
         tab4.markdown(preco_atual_html(), unsafe_allow_html=True)
-        tab4.line_chart(df.set_index("Data")['Mínimo'])
+        fig_minimo = go.Figure()
+        fig_minimo.add_trace(go.Scatter(x=df["Data"], y=df["Mínimo"], mode="lines", name="Mínimo", line=dict(color="#c0392b")))
+        fig_minimo.update_layout(xaxis_title="Data", yaxis_title="Preço", margin=dict(l=10, r=10, t=30, b=10))
+        tab4.plotly_chart(fig_minimo, use_container_width=True)
+
         tab5.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
         tab5.markdown(preco_atual_html(), unsafe_allow_html=True)
-        tab5.bar_chart(df.set_index("Data")['Volume'])
+        fig_volume = go.Figure()
+        fig_volume.add_trace(go.Bar(x=df["Data"], y=df["Volume"], name="Volume", marker_color="#0a3d62"))
+        fig_volume.update_layout(xaxis_title="Data", yaxis_title="Volume", margin=dict(l=10, r=10, t=30, b=10))
+        tab5.plotly_chart(fig_volume, use_container_width=True)
 
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
