@@ -1,28 +1,72 @@
-from assets.analytics_cache import atualizar_analytics_cache, consultar_analytics_cache
-import threading
-import yfinance as yf
+
+# === Imports ===
 import streamlit as st
 import pandas as pd
-from assets.analytics_cache import consultar_analytics_cache
-from assets.database import listar_ativos, listar_historicos, inserir_ativo
-import datetime
-from assets.scrapping import Scraper
-from assets.database import salvar_preco_atual, consultar_preco_atual, listar_ativos
 import threading
 import time
+import datetime
+import yfinance as yf
 
+from assets.scrapping import Scraper
+from assets.database import (
+    listar_ativos, listar_historicos, inserir_ativo,
+    salvar_preco_atual, consultar_preco_atual
+)
+from assets.analytics_cache import (
+    atualizar_analytics_cache, consultar_analytics_cache
+)
+
+
+# === Configuração da Página ===
 st.set_page_config(page_title="Dashboard Financeiro Interativo", layout="wide")
 
-# Thread para atualizar preços dos ativos periodicamente
+# === Utilitários ===
+def to_float(val):
+    if val is None:
+        return None
+    if isinstance(val, str):
+        val = val.replace('%', '').replace(',', '.').strip()
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+def buscar_preco_com_fallback(ticker):
+    """Busca preço via scraping, com fallback para yfinance."""
+    try:
+        scraper = Scraper(headless=True)
+        scraper.start_driver()
+        dados = scraper.scrape_stock(ticker)
+        scraper.quit_driver()
+        return {
+            'preco': to_float(dados.get("regular_market_price")),
+            'variacao': to_float(dados.get("regular_market_change")),
+            'variacao_percentual': to_float(dados.get("regular_market_change_percent")),
+        }
+    except Exception:
+        try:
+            yf_ticker = yf.Ticker(ticker)
+            info = yf_ticker.info
+            preco = info.get('regularMarketPrice') or info.get('previousClose')
+            variacao = info.get('regularMarketChange') or (preco - info.get('previousClose') if preco and info.get('previousClose') else None)
+            variacao_percentual = info.get('regularMarketChangePercent')
+            return {
+                'preco': preco,
+                'variacao': variacao,
+                'variacao_percentual': variacao_percentual,
+            }
+        except Exception:
+            return {'preco': None, 'variacao': None, 'variacao_percentual': None}
+
 def atualizar_precos_periodicamente(intervalo=60):
+    """Thread: Atualiza preços dos ativos em background."""
     while True:
         ativos = listar_ativos()
-        tickers = [a.ticker for a in ativos]
-        for ticker in tickers:
+        for ativo in ativos:
             try:
-                dados = buscar_preco_com_fallback(ticker)
+                dados = buscar_preco_com_fallback(ativo.ticker)
                 salvar_preco_atual(
-                    ticker,
+                    ativo.ticker,
                     preco=dados['preco'],
                     variacao=dados['variacao'],
                     variacao_percentual=dados['variacao_percentual'],
@@ -68,7 +112,8 @@ def buscar_preco_com_fallback(ticker):
         except Exception:
             return {'preco': None, 'variacao': None, 'variacao_percentual': None}
 
-# Inicia thread de atualização (apenas uma vez)
+
+# === Inicialização da Thread de Preços ===
 if 'thread_precos' not in st.session_state:
     thread = threading.Thread(target=atualizar_precos_periodicamente, args=(60,), daemon=True)
     thread.start()
@@ -76,22 +121,24 @@ if 'thread_precos' not in st.session_state:
 
 
 
-# Título simples
+
+# === Título ===
 st.markdown("""
 <h2 style='font-size:2rem; color:#0a3d62; margin-bottom:0.2em;'>💹 Dashboard Financeiro</h2>
 <div style='font-size:1rem; color:#444; margin-bottom:1em;'>Acompanhe preços e destaques do mercado.</div>
 """, unsafe_allow_html=True)
 
-# Sidebar refinada
 
+# === Sidebar ===
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2920/2920256.png", width=80)
     st.markdown("<h2 style='color:#0a3d62;'>Menu</h2>", unsafe_allow_html=True)
     menu = st.radio("Menu de opções", ["Filtros de Visualização", "Gerenciar Portfólio"], index=0, label_visibility="collapsed")
-    scraper = Scraper(headless=True)
     ativos = listar_ativos()
     tickers = [a.ticker for a in ativos]
 
+
+    # === Filtros de Visualização ===
     if menu == "Filtros de Visualização":
         st.subheader("Filtros de Visualização")
         periodos = {
@@ -109,6 +156,8 @@ with st.sidebar:
         periodo_sel = st.session_state.get('periodo_sel')
         dias = st.session_state.get('dias')
 
+
+    # === Gerenciar Portfólio ===
     if menu == "Gerenciar Portfólio":
         st.subheader("Adicionar novo ativo")
         novo_ativo = st.text_input("Ticker (ex: BBDC4.SA)", key="novo_ativo")
@@ -120,7 +169,6 @@ with st.sidebar:
             else:
                 inserir_ativo(novo_ativo)
                 def buscar_e_salvar_preco():
-                    from assets.database import salvar_preco_atual
                     dados = buscar_preco_com_fallback(novo_ativo)
                     salvar_preco_atual(
                         novo_ativo,
@@ -129,11 +177,9 @@ with st.sidebar:
                         variacao_percentual=dados['variacao_percentual'],
                         atualizado_em=None
                     )
-                # Buscar preço em thread para não travar o front
                 threading.Thread(target=buscar_e_salvar_preco, daemon=True).start()
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
-                    scraper.coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
-                # Rodar analytics em thread
+                    Scraper(headless=True).coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
                 threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
                 st.success(f"Ativo {novo_ativo} adicionado e históricos coletados!")
                 st.rerun()
@@ -149,7 +195,6 @@ with st.sidebar:
                     session.query(PrecoAtual).filter_by(ativo_id=ativo_obj.id).delete()
                     session.delete(ativo_obj)
                     session.commit()
-                    # Rodar analytics em thread
                     threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
                     st.success(f"Ativo {remover_ativo} removido!")
                 else:
@@ -164,6 +209,8 @@ with st.sidebar:
 
 
     # Valores padrão para visualização
+
+    # === Valores padrão para visualização ===
     if 'ticker_sel' not in st.session_state:
         st.session_state['ticker_sel'] = tickers[0] if tickers else None
     if 'periodo_sel' not in st.session_state:
@@ -171,12 +218,8 @@ with st.sidebar:
     if 'dias' not in st.session_state:
         st.session_state['dias'] = 90
 
-# Destaques do Mercado
 
-# Destaques do Mercado (versão nativa Streamlit)
-
-
-# Destaques do Mercado (simples)
+# === Destaques do Mercado ===
 st.markdown("<b>Destaques do Mercado</b>", unsafe_allow_html=True)
 analytics = {a.tipo: a for a in consultar_analytics_cache()}
 col1, col2, col3 = st.columns(3)
@@ -189,19 +232,16 @@ with col2:
 with col3:
     a = analytics.get('maior_tend_1m')
     st.metric("Maior tendência 1m", f"{a.ticker if a and a.ticker else '-'}", f"{a.valor:.4f}" if a and a.valor is not None else "-")
-
 st.markdown("---")
 
-# Gráficos e preço atual
-hoje = datetime.date.today()
 
-# Visualização principal
+# === Gráficos e Preço Atual ===
+hoje = datetime.date.today()
 ticker_sel = st.session_state.get('ticker_sel')
 periodo_sel = st.session_state.get('periodo_sel')
 dias = st.session_state.get('dias')
 if ticker_sel:
     if periodo_sel == "5 anos":
-        # Mostra todos os dados disponíveis do ativo
         historicos = [h for h in listar_historicos(ticker_sel) if h.preco_fechamento]
     else:
         data_inicio = hoje - datetime.timedelta(days=dias)
@@ -214,11 +254,8 @@ if ticker_sel:
         "📊 Volume"
     ])
     if not historicos:
-        tab1.warning("Não há dados suficientes para plotar o gráfico.")
-        tab2.warning("Não há dados suficientes para plotar o gráfico.")
-        tab3.warning("Não há dados suficientes para plotar o gráfico.")
-        tab4.warning("Não há dados suficientes para plotar o gráfico.")
-        tab5.warning("Não há dados suficientes para plotar o gráfico.")
+        for tab in [tab1, tab2, tab3, tab4, tab5]:
+            tab.warning("Não há dados suficientes para plotar o gráfico.")
     else:
         historicos.sort(key=lambda h: h.data)
         df = pd.DataFrame({
@@ -230,16 +267,6 @@ if ticker_sel:
             "Volume": [h.volume for h in historicos]
         })
 
-        # Função para exibir preço atual logo abaixo do título do gráfico
-        def to_float(val):
-            if val is None:
-                return None
-            if isinstance(val, str):
-                val = val.replace('%', '').replace(',', '').strip()
-            try:
-                return float(val)
-            except Exception:
-                return None
         def preco_atual_html():
             preco_obj = consultar_preco_atual(ticker_sel)
             if preco_obj:
@@ -263,25 +290,20 @@ if ticker_sel:
             else:
                 return "<div style='color:#888;margin-bottom:0.5rem;'>Aguardando atualização automática do preço...</div>"
 
-        with tab1:
-            st.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
-            st.markdown(preco_atual_html(), unsafe_allow_html=True)
-            st.line_chart(df.set_index("Data")['Abertura'])
-        with tab2:
-            st.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
-            st.markdown(preco_atual_html(), unsafe_allow_html=True)
-            st.line_chart(df.set_index("Data")['Fechamento'])
-        with tab3:
-            st.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
-            st.markdown(preco_atual_html(), unsafe_allow_html=True)
-            st.line_chart(df.set_index("Data")['Máximo'])
-        with tab4:
-            st.subheader(f"Preço Mínimo - {ticker_sel} ({periodo_sel})")
-            st.markdown(preco_atual_html(), unsafe_allow_html=True)
-            st.line_chart(df.set_index("Data")['Mínimo'])
-        with tab5:
-            st.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
-            st.markdown(preco_atual_html(), unsafe_allow_html=True)
-            st.bar_chart(df.set_index("Data")['Volume'])
+        tab1.subheader(f"Preço de Abertura - {ticker_sel} ({periodo_sel})")
+        tab1.markdown(preco_atual_html(), unsafe_allow_html=True)
+        tab1.line_chart(df.set_index("Data")['Abertura'])
+        tab2.subheader(f"Preço de Fechamento - {ticker_sel} ({periodo_sel})")
+        tab2.markdown(preco_atual_html(), unsafe_allow_html=True)
+        tab2.line_chart(df.set_index("Data")['Fechamento'])
+        tab3.subheader(f"Preço Máximo - {ticker_sel} ({periodo_sel})")
+        tab3.markdown(preco_atual_html(), unsafe_allow_html=True)
+        tab3.line_chart(df.set_index("Data")['Máximo'])
+        tab4.subheader(f"Preço Mínimo - {ticker_sel} ({periodo_sel})")
+        tab4.markdown(preco_atual_html(), unsafe_allow_html=True)
+        tab4.line_chart(df.set_index("Data")['Mínimo'])
+        tab5.subheader(f"Volume - {ticker_sel} ({periodo_sel})")
+        tab5.markdown(preco_atual_html(), unsafe_allow_html=True)
+        tab5.bar_chart(df.set_index("Data")['Volume'])
 
 st.caption("<span style='color:#888'>Desenvolvido com Streamlit e Python | Dados: Yahoo Finance</span>", unsafe_allow_html=True)
