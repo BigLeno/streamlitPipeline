@@ -1,9 +1,18 @@
+"""Módulo de utilidades financeiras para scraping, fallback, conversão e atualização de preços. Não depende de Streamlit."""
+
 import yfinance as yf
 import datetime
 from assets.scrapping import Scraper
 from assets.database import salvar_preco_atual, listar_ativos
 
-def to_float(val):
+def to_float(val) -> float:
+    """
+    Converte valores para float, tratando strings, porcentagens e vírgulas.
+    Args:
+        val (str|float|None): Valor a ser convertido.
+    Returns:
+        float|None: Valor convertido ou None se não for possível.
+    """
     if val is None:
         return None
     if isinstance(val, str):
@@ -14,7 +23,13 @@ def to_float(val):
         return None
 
 def buscar_preco_com_fallback(ticker):
-    """Busca preço via scraping, com fallback para yfinance."""
+    """
+    Busca preço do ativo via scraping. Se falhar, faz fallback para yfinance.
+    Args:
+        ticker (str): Código do ativo.
+    Returns:
+        dict: {'preco': float|None, 'variacao': float|None, 'variacao_percentual': float|None}
+    """
     try:
         scraper = Scraper(headless=True)
         scraper.start_driver()
@@ -41,7 +56,13 @@ def buscar_preco_com_fallback(ticker):
             return {'preco': None, 'variacao': None, 'variacao_percentual': None}
 
 def atualizar_precos_periodicamente(intervalo=60):
-    """Thread: Atualiza preços dos ativos em background."""
+    """
+    Thread: Atualiza preços dos ativos em background, salvando no banco.
+    Args:
+        intervalo (int): Intervalo em segundos entre atualizações.
+    Returns:
+        None
+    """
     while True:
         ativos = listar_ativos()
         for ativo in ativos:
