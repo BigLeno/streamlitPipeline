@@ -1,9 +1,19 @@
 
-
 from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, DateTime
 from sqlalchemy.orm import declarative_base, relationship
+import datetime
 
 Base = declarative_base()
+
+class AnalyticsCache(Base):
+    __tablename__ = 'analytics_cache'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tipo = Column(String, nullable=False)  # Ex: maior_rent_12m, menor_rent_mm3m, maior_tend_1m
+    ticker = Column(String, nullable=True)
+    valor = Column(Float, nullable=True)
+    atualizado_em = Column(DateTime, default=datetime.datetime.now)
+
+
 
 
 # Tabela para preço atual
@@ -22,7 +32,6 @@ class Ativo(Base):
     __tablename__ = 'ativos'
     id = Column(Integer, primary_key=True)
     ticker = Column(String, unique=True, nullable=False)
-    nome = Column(String)
     historicos = relationship('Historico', back_populates='ativo')
 
 # Exemplo de tabela de histórico de preços

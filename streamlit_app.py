@@ -1,10 +1,8 @@
+from assets.analytics_cache import atualizar_analytics_cache, consultar_analytics_cache
+import threading
 import streamlit as st
 import pandas as pd
-from assets.analytics import (
-    ativo_maior_rentabilidade_12m,
-    ativo_menor_rentabilidade_mm3m,
-    ativo_maior_tendencia_crescimento_1m
-)
+from assets.analytics_cache import consultar_analytics_cache
 from assets.database import listar_ativos, listar_historicos, inserir_ativo
 import datetime
 from assets.scrapping import Scraper
@@ -100,6 +98,8 @@ with st.sidebar:
                 inserir_ativo(novo_ativo)
                 with st.spinner(f"Coletando históricos de {novo_ativo} (5 anos)..."):
                     scraper.coletar_e_salvar_historico_ativos([novo_ativo], periodos='5Y')
+                # Rodar analytics em thread
+                threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
                 st.success(f"Ativo {novo_ativo} adicionado e históricos coletados!")
                 st.rerun()
         st.subheader("Remover ativo")
@@ -113,6 +113,8 @@ with st.sidebar:
                     session.query(Historico).filter_by(ativo_id=ativo_obj.id).delete()
                     session.delete(ativo_obj)
                     session.commit()
+                    # Rodar analytics em thread
+                    threading.Thread(target=atualizar_analytics_cache, daemon=True).start()
                     st.success(f"Ativo {remover_ativo} removido!")
                 else:
                     st.warning("Ativo não encontrado.")
@@ -143,29 +145,32 @@ st.markdown("""
     <h2 style='color:#f8d90f; margin-bottom:0.5rem;'>✨ Destaques do Mercado</h2>
 </div>
 """, unsafe_allow_html=True)
+
+# Buscar analytics do cache salvo no banco
+analytics = {a.tipo: a for a in consultar_analytics_cache()}
 col1, col2, col3 = st.columns(3)
 with col1:
     st.subheader("Maior rentabilidade (12 meses)")
-    ativo, rent = ativo_maior_rentabilidade_12m()
-    if ativo:
-        st.success(f"{ativo}", icon="⬆️")
-        st.metric("Rentabilidade", f"{rent:.2%}")
+    a = analytics.get('maior_rent_12m')
+    if a and a.ticker:
+        st.success(f"{a.ticker}", icon="⬆️")
+        st.metric("Rentabilidade", f"{a.valor:.2%}")
     else:
         st.warning("Sem dados")
 with col2:
     st.subheader("Menor rentabilidade (MM 3 meses)")
-    ativo, rent = ativo_menor_rentabilidade_mm3m()
-    if ativo:
-        st.error(f"{ativo}", icon="⬇️")
-        st.metric("Rentabilidade", f"{rent:.2%}")
+    a = analytics.get('menor_rent_mm3m')
+    if a and a.ticker:
+        st.error(f"{a.ticker}", icon="⬇️")
+        st.metric("Rentabilidade", f"{a.valor:.2%}")
     else:
         st.warning("Sem dados")
 with col3:
     st.subheader("Maior tendência de crescimento (próx. mês)")
-    ativo, tendencia = ativo_maior_tendencia_crescimento_1m()
-    if ativo:
-        st.info(f"{ativo}", icon="📈")
-        st.metric("Coeficiente", f"{tendencia:.4f}")
+    a = analytics.get('maior_tend_1m')
+    if a and a.ticker:
+        st.info(f"{a.ticker}", icon="📈")
+        st.metric("Coeficiente", f"{a.valor:.4f}")
     else:
         st.warning("Sem dados")
 

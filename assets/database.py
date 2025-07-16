@@ -1,7 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from assets.models import Base, Ativo, Historico
-from assets.models import PrecoAtual
+from assets.models import Base, Ativo, Historico, PrecoAtual
 import datetime
 
 DATABASE_URL = 'sqlite:///streamlit_pipeline.db'
@@ -11,11 +10,11 @@ SessionLocal = sessionmaker(bind=engine)
 def criar_banco():
     Base.metadata.create_all(engine)
 
-def inserir_ativo(ticker: str, nome: str = None):
+def inserir_ativo(ticker: str):
     session = SessionLocal()
     ativo = session.query(Ativo).filter_by(ticker=ticker).first()
     if not ativo:
-        ativo = Ativo(ticker=ticker, nome=nome)
+        ativo = Ativo(ticker=ticker)
         session.add(ativo)
         session.commit()
     session.close()
