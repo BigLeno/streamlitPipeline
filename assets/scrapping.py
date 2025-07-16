@@ -140,19 +140,41 @@ class Scraper:
 
     def scrape_stock(self, ticker_symbol: str) -> dict:
         """
-        Realiza o scraping dos dados do ativo no Yahoo Finance.
+        Realiza o scraping dos dados principais do ativo no Yahoo Finance.
         Args:
             ticker_symbol (str): Ticker do ativo.
         Returns:
-            dict: Dicionário com os dados do ativo.
+            dict: Dicionário com os dados principais do ativo.
         """
         url = f"https://finance.yahoo.com/quote/{ticker_symbol}"
         self.driver.get(url)
         self._accept_cookies()
-        stock = {"ticker": ticker_symbol}
-        stock.update(self._get_market_data(ticker_symbol))
-        stock.update(self._get_summary_data(ticker_symbol))
-        return stock
+        data = {}
+        try:
+            data["regular_market_price"] = self.driver.find_element(
+                By.CSS_SELECTOR,
+                f'[data-symbol="{ticker_symbol}"][data-field="regularMarketPrice"]',
+            ).text
+        except Exception:
+            data["regular_market_price"] = ""
+        try:
+            data["regular_market_change"] = self.driver.find_element(
+                By.CSS_SELECTOR,
+                f'[data-symbol="{ticker_symbol}"][data-field="regularMarketChange"]',
+            ).text
+        except Exception:
+            data["regular_market_change"] = ""
+        try:
+            data["regular_market_change_percent"] = (
+                self.driver.find_element(
+                    By.CSS_SELECTOR,
+                    f'[data-symbol="{ticker_symbol}"][data-field="regularMarketChangePercent"]',
+                )
+                .text.replace("(", "").replace(")", "")
+            )
+        except Exception:
+            data["regular_market_change_percent"] = ""
+        return data
 
     def _accept_cookies(self) -> None:
         """Aceita cookies se o overlay estiver presente."""
