@@ -36,7 +36,10 @@ class Scraper:
         self.window_size = window_size
         self.driver = None
 
-    def start_driver(self):
+    def start_driver(self) -> None:
+        """
+        Inicializa o driver do Selenium Chrome.
+        """
         options = Options()
         if self.headless:
             options.add_argument('--headless=new')
@@ -47,22 +50,45 @@ class Scraper:
         self.driver.set_window_size(*self.window_size)
 
     @staticmethod
-    def _date_to_str(dt):
+    def _date_to_str(dt: datetime.datetime) -> str:
+        """
+        Converte um datetime para string no formato 'YYYY-MM-DD'.
+        """
         return dt.strftime('%Y-%m-%d')
 
     @staticmethod
-    def _date_to_unix(date_str):
+    def _date_to_unix(date_str: str) -> int:
+        """
+        Converte uma string de data 'YYYY-MM-DD' para timestamp Unix.
+        """
         return int(time.mktime(time.strptime(date_str, "%Y-%m-%d")))
 
-    def quit_driver(self):
+    def quit_driver(self) -> None:
+        """
+        Encerra o driver do Selenium se estiver ativo.
+        """
         if self.driver:
             self.driver.quit()
             self.driver = None
 
-    def scrape_stock(self, ticker_symbol):
-        """Realiza o scraping dos dados do ativo no Yahoo Finance."""
+    def scrape_stock(self, ticker_symbol: str) -> dict:
+        """
+        Realiza o scraping dos dados do ativo no Yahoo Finance.
+        Args:
+            ticker_symbol (str): Ticker do ativo.
+        Returns:
+            dict: Dicionário com os dados do ativo.
+        """
         url = f"https://finance.yahoo.com/quote/{ticker_symbol}"
         self.driver.get(url)
+        self._accept_cookies()
+        stock = {"ticker": ticker_symbol}
+        stock.update(self._get_market_data(ticker_symbol))
+        stock.update(self._get_summary_data(ticker_symbol))
+        return stock
+
+    def _accept_cookies(self) -> None:
+        """Aceita cookies se o overlay estiver presente."""
         try:
             consent_overlay = WebDriverWait(self.driver, 3).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".consent-overlay"))
@@ -70,24 +96,27 @@ class Scraper:
             accept_all_button = consent_overlay.find_element(By.CSS_SELECTOR, ".accept-all")
             accept_all_button.click()
         except TimeoutException:
-            pass  # Cookie consent overlay missing
-        stock = {"ticker": ticker_symbol}
+            pass
+
+    def _get_market_data(self, ticker_symbol: str) -> dict:
+        """Obtém preço, variação e variação percentual do ativo."""
+        data = {}
         try:
-            stock["regular_market_price"] = self.driver.find_element(
+            data["regular_market_price"] = self.driver.find_element(
                 By.CSS_SELECTOR,
                 f'[data-symbol="{ticker_symbol}"][data-field="regularMarketPrice"]',
             ).text
         except Exception:
-            stock["regular_market_price"] = ""
+            data["regular_market_price"] = ""
         try:
-            stock["regular_market_change"] = self.driver.find_element(
+            data["regular_market_change"] = self.driver.find_element(
                 By.CSS_SELECTOR,
                 f'[data-symbol="{ticker_symbol}"][data-field="regularMarketChange"]',
             ).text
         except Exception:
-            stock["regular_market_change"] = ""
+            data["regular_market_change"] = ""
         try:
-            stock["regular_market_change_percent"] = (
+            data["regular_market_change_percent"] = (
                 self.driver.find_element(
                     By.CSS_SELECTOR,
                     f'[data-symbol="{ticker_symbol}"][data-field="regularMarketChangePercent"]',
@@ -96,8 +125,11 @@ class Scraper:
                 .replace(")", "")
             )
         except Exception:
-            stock["regular_market_change_percent"] = ""
-        # Dados do resumo
+            data["regular_market_change_percent"] = ""
+        return data
+
+    def _get_summary_data(self, ticker_symbol: str) -> dict:
+        """Obtém dados do resumo do ativo (ex: volume, PE, etc)."""
         summary_fields = {
             "previous_close": "PREV_CLOSE-value",
             "open_value": "OPEN-value",
@@ -116,85 +148,103 @@ class Scraper:
             "ex_dividend_date": "EX_DIVIDEND_DATE-value",
             "year_target_est": "ONE_YEAR_TARGET_PRICE-value",
         }
+        data = {}
         for key, data_test in summary_fields.items():
             try:
-                stock[key] = self.driver.find_element(
+                data[key] = self.driver.find_element(
                     By.CSS_SELECTOR, f'#quote-summary [data-test="{data_test}"]'
                 ).text
             except Exception:
-                stock[key] = ""
-        return stock
+                data[key] = ""
+        return data
 
-    def scrape_historical_data(self, ticker_symbol, days=None, data_inicial=None, data_final=None):
+    def scrape_historical_data(self, ticker_symbol: str, days: int = None, data_inicial: str = None, data_final: str = None) -> pd.DataFrame:
         """
         Extrai dados históricos do Yahoo Finance para o ticker informado.
         Remove linhas de dividendos/splits e trata intervalos sem dados.
+        Args:
+            ticker_symbol (str): Ticker do ativo.
+            days (int, opcional): Número máximo de linhas (ignorado se datas forem passadas).
+            data_inicial (str, opcional): Data inicial no formato 'YYYY-MM-DD'.
+            data_final (str, opcional): Data final no formato 'YYYY-MM-DD'.
+        Returns:
+            pd.DataFrame: DataFrame com os dados históricos limpos.
         """
-        if data_inicial and data_final:
-            period1 = self._date_to_unix(data_inicial)
-            period2 = self._date_to_unix(data_final)
-            url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history/?period1={period1}&period2={period2}"
-        else:
-            url = f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
-
+        url = self._build_history_url(ticker_symbol, data_inicial, data_final)
         self.driver.get(url)
         try:
             WebDriverWait(self.driver, 40).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
             html = self.driver.page_source
-            padrao_linha = re.compile(r'<tr.*?>\s*(<td.*?>.*?</td>\s*){7,}.*?</tr>', re.DOTALL)
-            padrao_coluna = re.compile(r'<td.*?>(.*?)</td>', re.DOTALL)
-            dados = []
-            for match in re.finditer(padrao_linha, html):
-                linha_html = match.group(0)
-                colunas = padrao_coluna.findall(linha_html)
-                # Remove linhas de dividendos/splits: geralmente possuem texto como 'Dividend' ou 'Split' em alguma coluna
-                if any('Dividend' in c or 'Split' in c for c in colunas):
-                    continue
-                if len(colunas) >= 7:
-                    dados.append([re.sub('<.*?>', '', c).replace('\n', '').strip() for c in colunas[:7]])
-                if days is not None and data_inicial is None and len(dados) >= days:
-                    break
+            dados = self._parse_historical_table(html, days, data_inicial)
             if not dados:
                 print(f"[AVISO] Nenhum dado encontrado para {ticker_symbol} no intervalo solicitado.")
                 return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
 
+            # Substitui valores vazios por 'N/A'
             df = pd.DataFrame(dados, columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
-
-            # Garante que o dado do dia atual esteja presente
-            hoje = datetime.datetime.now().strftime('%b %d, %Y')
-            if not (df['Date'] == hoje).any():
-                try:
-                    stock = self.scrape_stock(ticker_symbol)
-                    nova_linha = {
-                        "Date": hoje,
-                        "Open": stock.get("open_value", ""),
-                        "High": stock.get("regular_market_price", ""),
-                        "Low": stock.get("regular_market_price", ""),
-                        "Close*": stock.get("regular_market_price", ""),
-                        "Adj Close**": stock.get("regular_market_price", ""),
-                        "Volume": stock.get("volume", "")
-                    }
-                    df = pd.concat([pd.DataFrame([nova_linha]), df], ignore_index=True)
-                except Exception as e:
-                    print(f"[AVISO] Não foi possível adicionar linha do dia atual para {ticker_symbol}: {e}")
-
-            # Remove linhas duplicadas por data (mantém a primeira ocorrência)
+            df.replace({'': 'N/A', None: 'N/A'}, inplace=True)
+            self._add_today_if_missing(df, ticker_symbol)
             df = df.drop_duplicates(subset=["Date"], keep="first").reset_index(drop=True)
-
             df.to_csv(f"historical_{ticker_symbol}.csv", index=False)
             return df
         except Exception as e:
             print(f"[ERRO] Não foi possível extrair histórico de {ticker_symbol}: {e}")
             return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close*", "Adj Close**", "Volume"])
 
-    def coletar_historico_ativos(self, ativos, periodos=None):
+    def _build_history_url(self, ticker_symbol: str, data_inicial: str, data_final: str) -> str:
+        """Monta a URL de histórico do Yahoo Finance para o ticker e datas informadas."""
+        if data_inicial and data_final:
+            period1 = self._date_to_unix(data_inicial)
+            period2 = self._date_to_unix(data_final)
+            return f"https://finance.yahoo.com/quote/{ticker_symbol}/history/?period1={period1}&period2={period2}"
+        return f"https://finance.yahoo.com/quote/{ticker_symbol}/history"
+
+    def _parse_historical_table(self, html: str, days: int = None, data_inicial: str = None) -> list:
+        """Extrai e limpa as linhas válidas da tabela de histórico do HTML."""
+        padrao_linha = re.compile(r'<tr.*?>\s*(<td.*?>.*?</td>\s*){7,}.*?</tr>', re.DOTALL)
+        padrao_coluna = re.compile(r'<td.*?>(.*?)</td>', re.DOTALL)
+        dados = []
+        for match in re.finditer(padrao_linha, html):
+            linha_html = match.group(0)
+            colunas = padrao_coluna.findall(linha_html)
+            if any('Dividend' in c or 'Split' in c for c in colunas):
+                continue
+            if len(colunas) >= 7:
+                dados.append([re.sub('<.*?>', '', c).replace('\n', '').strip() for c in colunas[:7]])
+            if days is not None and data_inicial is None and len(dados) >= days:
+                break
+        return dados
+
+    def _add_today_if_missing(self, df: pd.DataFrame, ticker_symbol: str) -> None:
+        """Adiciona linha do dia atual se não existir no DataFrame. Preenche campos vazios com 'N/A'."""
+        hoje = datetime.datetime.now().strftime('%b %d, %Y')
+        if not (df['Date'] == hoje).any():
+            try:
+                stock = self.scrape_stock(ticker_symbol)
+                nova_linha = {
+                    "Date": hoje,
+                    "Open": stock.get("open_value", "N/A") or "N/A",
+                    "High": stock.get("regular_market_price", "N/A") or "N/A",
+                    "Low": stock.get("regular_market_price", "N/A") or "N/A",
+                    "Close*": stock.get("regular_market_price", "N/A") or "N/A",
+                    "Adj Close**": stock.get("regular_market_price", "N/A") or "N/A",
+                    "Volume": stock.get("volume", "N/A") or "N/A"
+                }
+                df.loc[-1] = nova_linha
+                df.index = df.index + 1
+                df.sort_index(inplace=True)
+            except Exception as e:
+                print(f"[AVISO] Não foi possível adicionar linha do dia atual para {ticker_symbol}: {e}")
+
+    def coletar_historico_ativos(self, ativos: list, periodos=None) -> None:
         """
         Coleta o histórico dos ativos informados, salvando arquivos para cada período solicitado na pasta 'historicos'.
-        periodos: lista de strings, ex: ['1D', '6M', 'YTD', ...]. Se None, usa ['6M', '1Y'] como padrão.
+        Args:
+            ativos (list): Lista de tickers.
+            periodos (list|str, opcional): Lista de períodos ou string única. Se None, usa ['6M', '1Y'].
         """
-        
         os.makedirs('historicos', exist_ok=True)
 
         if periodos is None:
