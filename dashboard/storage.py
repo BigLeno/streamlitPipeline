@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import Date, Float, ForeignKey, String, UniqueConstraint, create_engine, delete, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
-from dashboard.market_data import PRICE_COLUMNS, empty_prices
+from dashboard.market_data import PRICE_COLUMNS, empty_prices, to_date_index
 
 
 class Base(DeclarativeBase):
@@ -108,7 +108,10 @@ class Portfolio:
         if not rows:
             return empty_prices()
         frame = pd.DataFrame(rows, columns=["date", *PRICE_COLUMNS])
-        return frame.set_index(pd.DatetimeIndex(frame.pop("date"), name="date"))
+        return frame.set_index(to_date_index(frame.pop("date")))
+
+    def close(self) -> None:
+        self.engine.dispose()
 
     def delete_prices(self, ticker: str) -> None:
         with Session(self.engine) as session:

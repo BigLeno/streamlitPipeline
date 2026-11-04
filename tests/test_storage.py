@@ -17,6 +17,9 @@ class PortfolioTest(unittest.TestCase):
         self.portfolio = Portfolio("sqlite:///:memory:")
         self.prices = FakeMarketData(today=date(2026, 11, 4)).history("ABC", date(2026, 10, 1))
 
+    def tearDown(self):
+        self.portfolio.close()
+
     def test_add_list_and_remove(self):
         self.assertTrue(self.portfolio.add("ABC"))
         self.assertFalse(self.portfolio.add("ABC"))
@@ -36,7 +39,7 @@ class PortfolioTest(unittest.TestCase):
         self.assertEqual(len(stored), len(self.prices))
         self.assertEqual(stored["close"].iloc[-1], 999.0)
         self.assertEqual(self.portfolio.last_date("ABC"), date(2026, 11, 4))
-        pd.testing.assert_index_equal(stored.index, self.prices.index, check_names=False)
+        pd.testing.assert_index_equal(stored.index, self.prices.index)
 
     def test_missing_values_become_null(self):
         self.portfolio.add("ABC")

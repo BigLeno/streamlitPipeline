@@ -40,8 +40,13 @@ class MarketData(Protocol):
         """Cotação mais recente, ou None se o ticker não existir."""
 
 
+def to_date_index(values) -> pd.DatetimeIndex:
+    """Índice de datas sem fuso e com unidade fixa, para que dados de fontes diferentes sejam comparáveis."""
+    return pd.DatetimeIndex(pd.to_datetime(values), name="date").as_unit("ns")
+
+
 def empty_prices() -> pd.DataFrame:
-    return pd.DataFrame(columns=PRICE_COLUMNS, index=pd.DatetimeIndex([], name="date"), dtype=float)
+    return pd.DataFrame(columns=PRICE_COLUMNS, index=to_date_index([]), dtype=float)
 
 
 class YahooMarketData:
@@ -52,7 +57,7 @@ class YahooMarketData:
         if raw.empty:
             return empty_prices()
         prices = raw.rename(columns=str.lower)[PRICE_COLUMNS]
-        prices.index = pd.DatetimeIndex(raw.index.tz_localize(None).normalize(), name="date")
+        prices.index = to_date_index(raw.index.tz_localize(None).normalize())
         return prices.dropna(subset=["close"])
 
     def quote(self, ticker: str) -> Quote | None:
@@ -97,7 +102,7 @@ class FakeMarketData:
                 "close": close.to_numpy(),
                 "volume": rng.integers(100_000, 5_000_000, len(close)).astype(float),
             },
-            index=days,
+            index=to_date_index(days),
         )
 
     def quote(self, ticker: str) -> Quote | None:

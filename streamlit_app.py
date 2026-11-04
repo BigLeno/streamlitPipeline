@@ -76,7 +76,7 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
         st.header("Carteira")
         with st.form("add", clear_on_submit=True):
             new_ticker = st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT").strip().upper()
-            if st.form_submit_button("Adicionar", use_container_width=True) and new_ticker:
+            if st.form_submit_button("Adicionar", width="stretch") and new_ticker:
                 if new_ticker in tickers:
                     st.warning(f"{new_ticker} já está na carteira.")
                 elif quote(new_ticker) is None:
@@ -89,7 +89,7 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
 
         if tickers:
             to_remove = st.selectbox("Remover", tickers, index=None, placeholder="Escolha um ativo")
-            if st.button("Remover", disabled=to_remove is None, use_container_width=True):
+            if st.button("Remover", disabled=to_remove is None, width="stretch"):
                 portfolio.remove(to_remove)
                 synced.clear()
                 st.rerun()
@@ -167,7 +167,7 @@ def analysis_tabs(prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> Non
         ),
     ]
     for tab, chart in zip(tabs[:4], charts, strict=True):
-        tab.plotly_chart(chart, use_container_width=True)
+        tab.plotly_chart(chart, width="stretch")
 
     rsi = indicators.rsi(close)
     rsi_figure = line({"RSI 14": rsi}, "RSI")
@@ -175,8 +175,8 @@ def analysis_tabs(prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> Non
     rsi_figure.add_hline(y=30, line_dash="dot", line_color=COLORS["up"])
     rsi_figure.update_yaxes(range=[0, 100])
     macd = indicators.macd(close)
-    tabs[4].plotly_chart(rsi_figure, use_container_width=True)
-    tabs[4].plotly_chart(line({"MACD": macd["macd"], "Sinal": macd["signal"]}, "MACD"), use_container_width=True)
+    tabs[4].plotly_chart(rsi_figure, width="stretch")
+    tabs[4].plotly_chart(line({"MACD": macd["macd"], "Sinal": macd["signal"]}, "MACD"), width="stretch")
 
     monthly = indicators.monthly_returns(close) * 100
     heatmap = px.imshow(
@@ -184,7 +184,7 @@ def analysis_tabs(prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> Non
         y=[str(y) for y in monthly.index], color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
         text_auto=".1f", aspect="auto",
     )
-    tabs[5].plotly_chart(heatmap, use_container_width=True)
+    tabs[5].plotly_chart(heatmap, width="stretch")
 
     available = {name: series for name, series in all_closes.items() if len(series) > 20}
     if len(available) < 2:
@@ -193,7 +193,7 @@ def analysis_tabs(prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> Non
         correlation = indicators.returns_correlation(available)
         tabs[6].plotly_chart(
             px.imshow(correlation, text_auto=".2f", color_continuous_scale="RdBu", zmin=-1, zmax=1, aspect="auto"),
-            use_container_width=True,
+            width="stretch",
         )
         tabs[6].caption("Correlação dos retornos diários nas datas em comum de todo o histórico salvo.")
 
@@ -226,7 +226,7 @@ def main() -> None:
     if len(prices) < 2:
         st.warning("Ainda não há histórico suficiente para este ativo.")
         return
-    st.plotly_chart(price_chart(prices), use_container_width=True)
+    st.plotly_chart(price_chart(prices), width="stretch")
     st.subheader("Análises")
     analysis_tabs(prices, all_closes)
     st.caption("Dados: Yahoo Finance, via yfinance. Valores com atraso e sem garantia; não é recomendação de investimento.")
