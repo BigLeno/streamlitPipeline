@@ -14,7 +14,7 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 
 ## Funcionalidades
 
-- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...). O ticker é validado
+- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...). Apelidos comuns como `IBOV` e `SP500` são convertidos para o código do Yahoo. O ticker é validado
   antes de entrar na carteira.
 - **Histórico incremental:** na primeira vez baixa 5 anos; depois, só os dias que faltam, com alguns dias de
   sobreposição para pegar correções da fonte. Rodar de novo não duplica linhas.

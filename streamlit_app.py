@@ -15,7 +15,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from dashboard import highlights, indicators
-from dashboard.market_data import Quote, market_data_from_env
+from dashboard.market_data import Quote, market_data_from_env, normalize_ticker
 from dashboard.market_hours import format_duration, market_status
 from dashboard.storage import Portfolio
 from dashboard.sync import sync_history
@@ -75,12 +75,15 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
 
         st.header("Carteira")
         with st.form("add", clear_on_submit=True):
-            new_ticker = st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT, ^GSPC").strip().upper()
+            new_ticker = normalize_ticker(st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT, IBOV"))
             if st.form_submit_button("Adicionar", width="stretch") and new_ticker:
                 if new_ticker in tickers:
                     st.warning(f"{new_ticker} já está na carteira.")
                 elif quote(new_ticker) is None:
-                    st.error(f"Não encontrei cotação para {new_ticker}. Confira o código no Yahoo Finance.")
+                    st.error(
+                        f"Não encontrei cotação para {new_ticker}. Confira o código no Yahoo Finance: "
+                        "ações brasileiras terminam em .SA (PETR4.SA) e índices começam com ^ (^BVSP)."
+                    )
                 else:
                     portfolio.add(new_ticker)
                     with st.spinner(f"Baixando o histórico de {new_ticker}..."):
