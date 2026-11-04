@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
@@ -24,6 +25,9 @@ st.set_page_config(page_title="Dashboard Financeiro", page_icon="💹", layout="
 
 PERIODS = {"1 mês": 30, "3 meses": 90, "6 meses": 180, "1 ano": 365, "5 anos": 5 * 365}
 DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
+# Intervalo de atualização automática da cotação e do status do pregão.
+REFRESH_SECONDS = 60
+BRASILIA = ZoneInfo("America/Sao_Paulo")
 COLORS = {"up": "#1a9850", "down": "#d73027", "line": "#1f4e79", "accent": "#e08214", "muted": "#8c8c8c"}
 
 
@@ -47,7 +51,7 @@ def synced(ticker: str, day: str) -> int:
     return sync_history(get_portfolio(), get_source(), ticker, date.fromisoformat(day))
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=REFRESH_SECONDS, show_spinner=False)
 def quote(ticker: str) -> Quote | None:
     return get_source().quote(ticker)
 
@@ -57,6 +61,7 @@ def closes(tickers: list[str]) -> dict[str, pd.Series]:
     return {ticker: portfolio.prices(ticker)["close"] for ticker in tickers}
 
 
+@st.fragment(run_every=REFRESH_SECONDS)
 def market_banner() -> None:
     status = market_status(datetime.now(timezone.utc))
     when = status.local_time.strftime("%a %H:%M")
@@ -113,7 +118,9 @@ def highlight_metrics(all_closes: dict[str, pd.Series]) -> None:
             column.metric(label, item.ticker, fmt.format(item.value))
 
 
+@st.fragment(run_every=REFRESH_SECONDS)
 def quote_header(ticker: str) -> None:
+    """Atualiza sozinho a cada minuto, sem recarregar o resto da página."""
     current = quote(ticker)
     if current is None:
         st.subheader(ticker)
@@ -123,6 +130,8 @@ def quote_header(ticker: str) -> None:
     if current.change is not None:
         delta = f"{current.change:+.2f} ({current.change_percent:+.2%})"
     st.metric(f"{ticker} agora", f"{current.price:,.2f}", delta)
+    updated = datetime.now(BRASILIA).strftime("%H:%M:%S")
+    st.caption(f"Atualizado às {updated} (Brasília). Cotações do Yahoo podem ter atraso de até 15 minutos.")
 
 
 def price_chart(prices: pd.DataFrame) -> go.Figure:

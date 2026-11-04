@@ -42,6 +42,7 @@ class AppTest(unittest.TestCase):
         labels = [metric.label for metric in app.metric]
         self.assertIn("Maior retorno em 12 meses", labels)
         self.assertIn("AAA agora", labels)
+        self.assertTrue(any("Atualizado às" in caption.value for caption in app.caption))
 
     def test_switching_ticker_and_period(self):
         app = self.run_app()
