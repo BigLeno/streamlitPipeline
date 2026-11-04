@@ -24,6 +24,7 @@ class FakeMarketDataTest(unittest.TestCase):
     def test_quote(self):
         quote = self.source.quote("ABC")
         self.assertIsInstance(quote, Quote)
+        self.assertIsInstance(self.source.quote("^BVSP"), Quote)
         self.assertIsNone(self.source.quote("???"))
 
     def test_quote_change(self):

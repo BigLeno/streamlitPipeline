@@ -14,7 +14,7 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 
 ## Funcionalidades
 
-- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`...). O ticker é validado
+- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...). O ticker é validado
   antes de entrar na carteira.
 - **Histórico incremental:** na primeira vez baixa 5 anos; depois, só os dias que faltam, com alguns dias de
   sobreposição para pegar correções da fonte. Rodar de novo não duplica linhas.
@@ -58,7 +58,7 @@ Para explorar sem internet, use dados sintéticos: `MARKET_DATA=fake streamlit r
 | --- | --- | --- |
 | `MARKET_DATA` | `yahoo` | `yahoo` (dados reais) ou `fake` (sintéticos) |
 | `DATABASE_URL` | `sqlite:///data/dashboard.db` | Qualquer URL do SQLAlchemy, por exemplo PostgreSQL |
-| `DEFAULT_TICKERS` | `PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
+| `DEFAULT_TICKERS` | `^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
 
 O app não precisa de Chrome nem de chave de API, então pode ser publicado direto no
 [Streamlit Community Cloud](https://streamlit.io/cloud).

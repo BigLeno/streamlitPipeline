@@ -106,7 +106,7 @@ class FakeMarketData:
         )
 
     def quote(self, ticker: str) -> Quote | None:
-        if not ticker or not ticker.replace(".", "").replace("-", "").isalnum():
+        if not ticker or not ticker.lstrip("^").replace(".", "").replace("-", "").isalnum():
             return None
         recent = self.history(ticker, self.today - timedelta(days=10))
         if len(recent) < 2:

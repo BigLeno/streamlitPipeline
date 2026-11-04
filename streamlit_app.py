@@ -23,7 +23,7 @@ from dashboard.sync import sync_history
 st.set_page_config(page_title="Dashboard Financeiro", page_icon="💹", layout="wide")
 
 PERIODS = {"1 mês": 30, "3 meses": 90, "6 meses": 180, "1 ano": 365, "5 anos": 5 * 365}
-DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
+DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
 COLORS = {"up": "#1a9850", "down": "#d73027", "line": "#1f4e79", "accent": "#e08214", "muted": "#8c8c8c"}
 
 
@@ -75,7 +75,7 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
 
         st.header("Carteira")
         with st.form("add", clear_on_submit=True):
-            new_ticker = st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT").strip().upper()
+            new_ticker = st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT, ^GSPC").strip().upper()
             if st.form_submit_button("Adicionar", width="stretch") and new_ticker:
                 if new_ticker in tickers:
                     st.warning(f"{new_ticker} já está na carteira.")
