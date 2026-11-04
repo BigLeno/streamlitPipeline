@@ -61,6 +61,7 @@ Para explorar sem internet, use dados sintéticos: `MARKET_DATA=fake streamlit r
 | `MARKET_DATA` | `yahoo` | `yahoo` (dados reais) ou `fake` (sintéticos) |
 | `DATABASE_URL` | `sqlite:///data/dashboard.db` | Qualquer URL do SQLAlchemy, por exemplo PostgreSQL |
 | `DEFAULT_TICKERS` | `^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
+| `DEFAULT_SELECTED` | `^BVSP` | Ativo selecionado ao abrir o app (Ibovespa) |
 
 O app não precisa de Chrome nem de chave de API, então pode ser publicado direto no
 [Streamlit Community Cloud](https://streamlit.io/cloud).

@@ -25,6 +25,8 @@ st.set_page_config(page_title="Dashboard Financeiro", page_icon="💹", layout="
 
 PERIODS = {"1 mês": 30, "3 meses": 90, "6 meses": 180, "1 ano": 365, "5 anos": 5 * 365}
 DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
+# Ativo que já aparece selecionado ao abrir o app, se estiver na carteira.
+DEFAULT_SELECTED = os.getenv("DEFAULT_SELECTED", "^BVSP")
 # Intervalo de atualização automática da cotação e do status do pregão.
 REFRESH_SECONDS = 60
 BRASILIA = ZoneInfo("America/Sao_Paulo")
@@ -75,7 +77,8 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
     portfolio = get_portfolio()
     with st.sidebar:
         st.header("Visualização")
-        selected = st.selectbox("Ativo", tickers, index=0 if tickers else None, placeholder="Cadastre um ativo")
+        default_index = tickers.index(DEFAULT_SELECTED) if DEFAULT_SELECTED in tickers else 0
+        selected = st.selectbox("Ativo", tickers, index=default_index if tickers else None, placeholder="Cadastre um ativo")
         period = st.selectbox("Período", list(PERIODS), index=3)
 
         st.header("Carteira")
