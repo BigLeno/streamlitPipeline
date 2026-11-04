@@ -39,7 +39,8 @@ class PortfolioTest(unittest.TestCase):
         self.assertEqual(len(stored), len(self.prices))
         self.assertEqual(stored["close"].iloc[-1], 999.0)
         self.assertEqual(self.portfolio.last_date("ABC"), date(2026, 11, 4))
-        pd.testing.assert_index_equal(stored.index, self.prices.index, check_freq=False)
+        self.assertEqual(list(stored.index), list(self.prices.index))
+        self.assertEqual(stored.index.dtype, self.prices.index.dtype)
 
     def test_missing_values_become_null(self):
         self.portfolio.add("ABC")
