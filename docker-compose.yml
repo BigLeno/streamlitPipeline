@@ -1,0 +1,33 @@
+# App + PostgreSQL. Uso: docker compose up --build  →  http://localhost:8501
+# Para rodar sem internet, com dados sintéticos: MARKET_DATA=fake docker compose up --build
+services:
+  app:
+    build: .
+    image: ghcr.io/bigleno/streamlitpipeline:local
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql+psycopg://dashboard:${POSTGRES_PASSWORD:-dashboard}@db:5432/dashboard
+      MARKET_DATA: ${MARKET_DATA:-yahoo}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dashboard
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dashboard}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
