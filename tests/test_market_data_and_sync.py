@@ -3,7 +3,7 @@ from datetime import date
 
 import pandas as pd
 
-from dashboard.market_data import FakeMarketData, Quote, market_data_from_env
+from dashboard.market_data import FakeMarketData, Quote, market_data_from_env, normalize_ticker
 from dashboard.sync import sync_history
 
 TODAY = date(2026, 11, 4)
@@ -24,6 +24,7 @@ class FakeMarketDataTest(unittest.TestCase):
     def test_quote(self):
         quote = self.source.quote("ABC")
         self.assertIsInstance(quote, Quote)
+        self.assertIsInstance(self.source.quote("^BVSP"), Quote)
         self.assertIsNone(self.source.quote("???"))
 
     def test_quote_change(self):
@@ -31,6 +32,13 @@ class FakeMarketDataTest(unittest.TestCase):
         self.assertEqual(quote.change, 10)
         self.assertAlmostEqual(quote.change_percent, 0.10)
         self.assertIsNone(Quote(price=1, previous_close=None).change_percent)
+
+    def test_normalize_ticker(self):
+        self.assertEqual(normalize_ticker(" petr4.sa "), "PETR4.SA")
+        for alias in ("ibov", "IBOVESPA", "bvsp", "^bvsp"):
+            with self.subTest(alias=alias):
+                self.assertEqual(normalize_ticker(alias), "^BVSP")
+        self.assertEqual(normalize_ticker("s&p 500"), "^GSPC")
 
     def test_source_from_env(self):
         self.assertIsInstance(market_data_from_env("fake"), FakeMarketData)

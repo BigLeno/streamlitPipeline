@@ -42,6 +42,13 @@ class AppTest(unittest.TestCase):
         labels = [metric.label for metric in app.metric]
         self.assertIn("Maior retorno em 12 meses", labels)
         self.assertIn("AAA agora", labels)
+        self.assertTrue(any("Atualizado às" in caption.value for caption in app.caption))
+
+    def test_ibovespa_is_selected_by_default(self):
+        with mock.patch.dict(os.environ, {"DEFAULT_TICKERS": "AAA,^BVSP"}):
+            app = self.run_app()
+        self.assertEqual(app.sidebar.selectbox[0].value, "^BVSP")
+        self.assertIn("^BVSP agora", [metric.label for metric in app.metric])
 
     def test_switching_ticker_and_period(self):
         app = self.run_app()

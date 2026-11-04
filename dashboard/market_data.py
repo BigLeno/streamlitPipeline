@@ -106,12 +106,30 @@ class FakeMarketData:
         )
 
     def quote(self, ticker: str) -> Quote | None:
-        if not ticker or not ticker.replace(".", "").replace("-", "").isalnum():
+        if not ticker or not ticker.lstrip("^").replace(".", "").replace("-", "").isalnum():
             return None
         recent = self.history(ticker, self.today - timedelta(days=10))
         if len(recent) < 2:
             return None
         return Quote(price=float(recent["close"].iloc[-1]), previous_close=float(recent["close"].iloc[-2]))
+
+
+# Nomes populares que não são o código do Yahoo Finance.
+TICKER_ALIASES = {
+    "IBOV": "^BVSP",
+    "IBOVESPA": "^BVSP",
+    "BVSP": "^BVSP",
+    "SP500": "^GSPC",
+    "S&P500": "^GSPC",
+    "NASDAQ": "^IXIC",
+    "DOWJONES": "^DJI",
+}
+
+
+def normalize_ticker(text: str) -> str:
+    """Padroniza o que o usuário digitou: maiúsculas, sem espaços e com apelidos resolvidos."""
+    ticker = "".join(text.split()).upper()
+    return TICKER_ALIASES.get(ticker, ticker)
 
 
 def market_data_from_env(name: str) -> MarketData:

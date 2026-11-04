@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
@@ -15,7 +16,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from dashboard import highlights, indicators
-from dashboard.market_data import Quote, market_data_from_env
+from dashboard.market_data import Quote, market_data_from_env, normalize_ticker
 from dashboard.market_hours import format_duration, market_status
 from dashboard.storage import Portfolio
 from dashboard.sync import sync_history
@@ -23,7 +24,12 @@ from dashboard.sync import sync_history
 st.set_page_config(page_title="Dashboard Financeiro", page_icon="💹", layout="wide")
 
 PERIODS = {"1 mês": 30, "3 meses": 90, "6 meses": 180, "1 ano": 365, "5 anos": 5 * 365}
-DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
+DEFAULT_TICKERS = os.getenv("DEFAULT_TICKERS", "^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL")
+# Ativo que já aparece selecionado ao abrir o app, se estiver na carteira.
+DEFAULT_SELECTED = os.getenv("DEFAULT_SELECTED", "^BVSP")
+# Intervalo de atualização automática da cotação e do status do pregão.
+REFRESH_SECONDS = 60
+BRASILIA = ZoneInfo("America/Sao_Paulo")
 COLORS = {"up": "#1a9850", "down": "#d73027", "line": "#1f4e79", "accent": "#e08214", "muted": "#8c8c8c"}
 
 
@@ -47,7 +53,7 @@ def synced(ticker: str, day: str) -> int:
     return sync_history(get_portfolio(), get_source(), ticker, date.fromisoformat(day))
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=REFRESH_SECONDS, show_spinner=False)
 def quote(ticker: str) -> Quote | None:
     return get_source().quote(ticker)
 
@@ -57,6 +63,7 @@ def closes(tickers: list[str]) -> dict[str, pd.Series]:
     return {ticker: portfolio.prices(ticker)["close"] for ticker in tickers}
 
 
+@st.fragment(run_every=REFRESH_SECONDS)
 def market_banner() -> None:
     status = market_status(datetime.now(timezone.utc))
     when = status.local_time.strftime("%a %H:%M")
@@ -70,17 +77,21 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
     portfolio = get_portfolio()
     with st.sidebar:
         st.header("Visualização")
-        selected = st.selectbox("Ativo", tickers, index=0 if tickers else None, placeholder="Cadastre um ativo")
+        default_index = tickers.index(DEFAULT_SELECTED) if DEFAULT_SELECTED in tickers else 0
+        selected = st.selectbox("Ativo", tickers, index=default_index if tickers else None, placeholder="Cadastre um ativo")
         period = st.selectbox("Período", list(PERIODS), index=3)
 
         st.header("Carteira")
         with st.form("add", clear_on_submit=True):
-            new_ticker = st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT").strip().upper()
+            new_ticker = normalize_ticker(st.text_input("Ticker", placeholder="ex.: BBDC4.SA, MSFT, IBOV"))
             if st.form_submit_button("Adicionar", width="stretch") and new_ticker:
                 if new_ticker in tickers:
                     st.warning(f"{new_ticker} já está na carteira.")
                 elif quote(new_ticker) is None:
-                    st.error(f"Não encontrei cotação para {new_ticker}. Confira o código no Yahoo Finance.")
+                    st.error(
+                        f"Não encontrei cotação para {new_ticker}. Confira o código no Yahoo Finance: "
+                        "ações brasileiras terminam em .SA (PETR4.SA) e índices começam com ^ (^BVSP)."
+                    )
                 else:
                     portfolio.add(new_ticker)
                     with st.spinner(f"Baixando o histórico de {new_ticker}..."):
@@ -110,7 +121,9 @@ def highlight_metrics(all_closes: dict[str, pd.Series]) -> None:
             column.metric(label, item.ticker, fmt.format(item.value))
 
 
+@st.fragment(run_every=REFRESH_SECONDS)
 def quote_header(ticker: str) -> None:
+    """Atualiza sozinho a cada minuto, sem recarregar o resto da página."""
     current = quote(ticker)
     if current is None:
         st.subheader(ticker)
@@ -120,6 +133,8 @@ def quote_header(ticker: str) -> None:
     if current.change is not None:
         delta = f"{current.change:+.2f} ({current.change_percent:+.2%})"
     st.metric(f"{ticker} agora", f"{current.price:,.2f}", delta)
+    updated = datetime.now(BRASILIA).strftime("%H:%M:%S")
+    st.caption(f"Atualizado às {updated} (Brasília). Cotações do Yahoo podem ter atraso de até 15 minutos.")
 
 
 def price_chart(prices: pd.DataFrame) -> go.Figure:

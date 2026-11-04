@@ -14,7 +14,7 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 
 ## Funcionalidades
 
-- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`...). O ticker é validado
+- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...). Apelidos comuns como `IBOV` e `SP500` são convertidos para o código do Yahoo. O ticker é validado
   antes de entrar na carteira.
 - **Histórico incremental:** na primeira vez baixa 5 anos; depois, só os dias que faltam, com alguns dias de
   sobreposição para pegar correções da fonte. Rodar de novo não duplica linhas.
@@ -23,6 +23,8 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 - **Destaques da carteira:** maior retorno em 12 meses, pior tendência em 3 meses pela média móvel de 21
   dias e maior tendência de alta, projetada a partir de uma regressão no log do preço (comparável entre
   ativos de preços diferentes).
+- **Cotação ao vivo:** a cotação e o status do pregão se atualizam sozinhos a cada minuto, sem recarregar
+  os gráficos.
 - **Pregão americano:** indica se a NYSE/Nasdaq está aberta e quanto falta para abrir ou fechar.
 
 ## Arquitetura
@@ -58,7 +60,8 @@ Para explorar sem internet, use dados sintéticos: `MARKET_DATA=fake streamlit r
 | --- | --- | --- |
 | `MARKET_DATA` | `yahoo` | `yahoo` (dados reais) ou `fake` (sintéticos) |
 | `DATABASE_URL` | `sqlite:///data/dashboard.db` | Qualquer URL do SQLAlchemy, por exemplo PostgreSQL |
-| `DEFAULT_TICKERS` | `PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
+| `DEFAULT_TICKERS` | `^BVSP,PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
+| `DEFAULT_SELECTED` | `^BVSP` | Ativo selecionado ao abrir o app (Ibovespa) |
 
 O app não precisa de Chrome nem de chave de API, então pode ser publicado direto no
 [Streamlit Community Cloud](https://streamlit.io/cloud).
