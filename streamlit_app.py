@@ -55,8 +55,15 @@ def synced(ticker: str, day: str) -> int:
 
 
 @st.cache_data(ttl=REFRESH_SECONDS, show_spinner=False)
+def _quote_values(ticker: str) -> tuple[float, float | None] | None:
+    """Guarda no cache só números: objetos de classes do app quebram o cache quando o código é recarregado."""
+    current = get_source().quote(ticker)
+    return None if current is None else (current.price, current.previous_close)
+
+
 def quote(ticker: str) -> Quote | None:
-    return get_source().quote(ticker)
+    values = _quote_values(ticker)
+    return None if values is None else Quote(price=values[0], previous_close=values[1])
 
 
 def closes(tickers: list[str]) -> dict[str, pd.Series]:
