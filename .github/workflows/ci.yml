@@ -26,8 +26,12 @@ jobs:
   screenshot:
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -44,3 +48,15 @@ jobs:
         with:
           name: screenshot
           path: docs/dashboard.png
+      - name: Versionar a captura quando ainda não existe no repositório
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if git ls-files --error-unmatch docs/dashboard.png >/dev/null 2>&1; then
+            echo "Captura já versionada; nada a fazer."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/dashboard.png
+          git commit -m "docs: adiciona captura de tela do dashboard"
+          git push
