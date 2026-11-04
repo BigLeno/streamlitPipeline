@@ -10,6 +10,8 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 
 ![Dashboard com dados sintéticos](docs/dashboard.png)
 
+<sub>Captura gerada pela CI com dados e tickers fictícios.</sub>
+
 ## Funcionalidades
 
 - **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`...). O ticker é validado

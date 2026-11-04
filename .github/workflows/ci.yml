@@ -40,7 +40,7 @@ jobs:
       - name: Captura de tela com dados sintéticos
         env:
           MARKET_DATA: fake
-          DEFAULT_TICKERS: PETR4.SA,VALE3.SA,ITUB4.SA,AAPL
+          DEFAULT_TICKERS: DEMO3,EXMP4,FICT11,TEST
         run: |
           streamlit run streamlit_app.py --server.port 8501 &
           python scripts/screenshot.py http://localhost:8501 docs/dashboard.png
