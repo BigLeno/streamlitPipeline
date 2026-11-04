@@ -1,4 +1,11 @@
-env
-__pycache__
-tests.py
-historicos
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ruff_cache/
+.env
+
+# Banco local e dados baixados
+data/
+*.db

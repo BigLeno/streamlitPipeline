@@ -1,95 +1,80 @@
-# Dashboard Financeiro Interativo
+# 💹 Dashboard Financeiro
 
-Este projeto é um dashboard financeiro robusto, interativo e modular, desenvolvido em Python com Streamlit, para análise e acompanhamento de ativos do mercado financeiro brasileiro e internacional.
+[![CI](https://github.com/BigLeno/streamlitPipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/BigLeno/streamlitPipeline/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+
+Dashboard em Streamlit para acompanhar uma carteira de ações brasileiras e americanas: cotação,
+gráfico de candles, indicadores técnicos, retornos mensais, correlação entre ativos e destaques da
+carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
+
+![Dashboard com dados sintéticos](docs/dashboard.png)
+
+<sub>Captura gerada pela CI com dados e tickers fictícios.</sub>
 
 ## Funcionalidades
-- **Extração de dados**: Scraping automatizado e fallback para Yahoo Finance (yfinance)
-- **Banco de dados**: Persistência local via SQLite (pronto para migração para SQL Server)
-- **Gestão de portfólio**: Cadastro, remoção e atualização automática de ativos
-- **Atualização automática de preços**: Thread em background
-- **Indicador de mercado aberto/fechado (EUA)**: Com tempo até abertura/fechamento
-- **Gráficos interativos**: Todos os gráficos com Plotly
-- **Métricas e análises avançadas**:
-  - Retorno acumulado
-  - Volatilidade
-  - Drawdown
-  - Médias móveis
-  - RSI e MACD
-  - Correlação entre ativos (heatmap)
-  - Heatmap de retornos mensais
-- **Destaques do mercado**: Métricas rápidas dos melhores e piores ativos
-- **Interface profissional**: Layout limpo, responsivo e informativo
 
-## Tecnologias Utilizadas
-- Python 3.10+
-- Streamlit
-- Pandas
-- Plotly
-- SQLAlchemy
-- SQLite (padrão, mas adaptável para SQL Server)
-- yfinance
-- Selenium (scraping)
-- pytz
+- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`...). O ticker é validado
+  antes de entrar na carteira.
+- **Histórico incremental:** na primeira vez baixa 5 anos; depois, só os dias que faltam, com alguns dias de
+  sobreposição para pegar correções da fonte. Rodar de novo não duplica linhas.
+- **Gráficos:** candles com volume, retorno acumulado, volatilidade anualizada, drawdown, médias móveis,
+  RSI (Wilder) e MACD, retornos mensais (ano × mês) e correlação dos retornos diários.
+- **Destaques da carteira:** maior retorno em 12 meses, pior tendência em 3 meses pela média móvel de 21
+  dias e maior tendência de alta, projetada a partir de uma regressão no log do preço (comparável entre
+  ativos de preços diferentes).
+- **Pregão americano:** indica se a NYSE/Nasdaq está aberta e quanto falta para abrir ou fechar.
 
-## Instalação
+## Arquitetura
 
-1. **Clone o repositório:**
+```
+streamlit_app.py        # interface (Streamlit + Plotly)
+dashboard/
+├── market_data.py      # Yahoo Finance via yfinance e uma fonte sintética para demo e testes
+├── storage.py          # carteira e histórico com SQLAlchemy (SQLite por padrão)
+├── sync.py             # atualização incremental do histórico
+├── indicators.py       # indicadores técnicos (funções puras sobre séries do pandas)
+├── highlights.py       # destaques da carteira
+└── market_hours.py     # horário do pregão americano
+```
+
+Os cálculos não dependem da interface, da rede nem do banco, então são testados isoladamente com
+séries sintéticas. A interface é testada com o `AppTest` do Streamlit, rodando o app inteiro com a fonte
+sintética.
+
+## Como rodar
 
 ```bash
 git clone https://github.com/BigLeno/streamlitPipeline.git
 cd streamlitPipeline
-```
-
-2. **Crie e ative um ambiente virtual (recomendado):**
-
-No Windows:
-```bash
-python -m venv env
-.\env\Scripts\activate
-```
-No Linux/Mac:
-```bash
-python3 -m venv env
-source env/bin/activate
-```
-
-3. **Instale as dependências:**
-
-```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-4. **(Opcional) Instale o Chrome para uso do Selenium:**
-- Baixe o Chrome : https://www.google.com/intl/pt-BR/chrome/
-
-## Como Rodar
-
-```bash
 streamlit run streamlit_app.py
 ```
 
-O dashboard abrirá automaticamente no navegador padrão.
+Para explorar sem internet, use dados sintéticos: `MARKET_DATA=fake streamlit run streamlit_app.py`.
 
-## Estrutura do Projeto
-- `streamlit_app.py`: Módulo principal do dashboard
-- `assets/`: Módulos utilitários (scraping, banco, analytics, etc)
-- `requirements.txt`: Dependências do projeto
-- `historicos/`: Arquivos de históricos baixados
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `MARKET_DATA` | `yahoo` | `yahoo` (dados reais) ou `fake` (sintéticos) |
+| `DATABASE_URL` | `sqlite:///data/dashboard.db` | Qualquer URL do SQLAlchemy, por exemplo PostgreSQL |
+| `DEFAULT_TICKERS` | `PETR4.SA,VALE3.SA,ITUB4.SA,AAPL` | Carteira inicial quando o banco está vazio |
 
-## Métodos e Lógica
-- **Scraping**: Coleta de preços e históricos via Selenium, com fallback automático para yfinance em caso de erro
-- **Banco de dados**: ORM SQLAlchemy, pronto para migrar para SQL Server (basta trocar a string de conexão)
-- **Atualização automática**: Thread para atualização periódica dos preços
-- **Análises**: Todas as métricas e gráficos são calculados em tempo real a partir dos dados históricos
-- **Interface**: Streamlit + Plotly para visualização interativa e responsiva
+O app não precisa de Chrome nem de chave de API, então pode ser publicado direto no
+[Streamlit Community Cloud](https://streamlit.io/cloud).
 
-## Observações
-- Para usar SQL Server, basta instalar o driver (ex: `pyodbc`) e alterar a string de conexão no módulo de banco de dados.
-- O scraping pode exigir o ChromeDriver instalado e compatível com o navegador.
-- O dashboard é modular e fácil de expandir com novas análises ou integrações.
+## Testes
 
-## Autor
-BigLeno
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+python -m unittest -v
+```
 
----
-Dúvidas ou sugestões? Abra uma issue ou entre em contato!
+A CI roda lint e testes em Python 3.10, 3.12 e 3.13 e gera a captura de tela acima com dados sintéticos.
+
+## Limitações
+
+- Os dados do Yahoo Finance têm atraso e podem falhar sem aviso; o app mostra o último histórico salvo.
+- O horário do pregão não considera feriados.
+- Os destaques são estatística descritiva, não recomendação de investimento.
