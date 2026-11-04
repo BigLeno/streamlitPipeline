@@ -47,6 +47,9 @@ class AppTest(unittest.TestCase):
         labels = [metric.label for metric in app.metric]
         self.assertIn("Maior retorno em 12 meses", labels)
         self.assertIn("AAA agora", labels)
+        self.assertTrue(all(metric.help for metric in app.metric), "todo card deve ter texto de ajuda")
+        readings = [md.value for md in app.markdown if md.value.startswith("**Leitura atual:**")]
+        self.assertGreaterEqual(len(readings), 7)
         trend = next(metric for metric in app.metric if metric.label.endswith("(AAA)"))
         self.assertIn(trend.value, {"Alta", "Baixa", "Estável"})
         self.assertTrue(any("Atualizado às" in caption.value for caption in app.caption))

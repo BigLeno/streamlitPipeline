@@ -27,6 +27,8 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
   estável (variação contra o fechamento anterior, conforme o horário da B3 ou da bolsa americana).
 - **Cotação ao vivo:** a cotação e o status do pregão se atualizam sozinhos a cada minuto, sem recarregar
   os gráficos.
+- **Explicações:** todo card tem um ícone de ajuda, e cada gráfico mostra uma leitura do momento com os números
+  do ativo (por exemplo, o drawdown máximo e quando ocorreu) e um parágrafo de como interpretar o indicador.
 - **Pregão americano:** indica se a NYSE/Nasdaq está aberta e quanto falta para abrir ou fechar.
 
 ## Arquitetura

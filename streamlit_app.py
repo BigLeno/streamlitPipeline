@@ -15,7 +15,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from dashboard import highlights, indicators
+from dashboard import explanations, highlights, indicators
+from dashboard.explanations import HELP
 from dashboard.market_data import Quote, market_data_from_env, normalize_ticker
 from dashboard.market_hours import format_duration, market_for, market_status
 from dashboard.storage import Portfolio
@@ -110,16 +111,16 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
 def highlight_metrics(all_closes: dict[str, pd.Series], selected: str) -> None:
     today = date.today()
     cards = [
-        ("Maior retorno em 12 meses", highlights.best_return(all_closes, today), "{:+.1%}"),
-        ("Pior tendência em 3 meses (MM21)", highlights.worst_moving_average_trend(all_closes, today), "{:+.1%}"),
-        ("Maior tendência de alta (proj. 1 mês)", highlights.strongest_trend(all_closes, today), "{:+.1%}"),
+        ("Maior retorno em 12 meses", highlights.best_return(all_closes, today), HELP["best_return"]),
+        ("Pior tendência em 3 meses (MM21)", highlights.worst_moving_average_trend(all_closes, today), HELP["worst_trend"]),
+        ("Maior tendência de alta (proj. 1 mês)", highlights.strongest_trend(all_closes, today), HELP["strongest_trend"]),
     ]
     columns = st.columns(4)
-    for column, (label, item, fmt) in zip(columns[:3], cards, strict=True):
+    for column, (label, item, help_text) in zip(columns[:3], cards, strict=True):
         if item is None:
-            column.metric(label, "-")
+            column.metric(label, "-", help=help_text)
         else:
-            column.metric(label, item.ticker, fmt.format(item.value))
+            column.metric(label, item.ticker, f"{item.value:+.1%}", help=help_text)
     with columns[3]:
         day_trend_card(selected)
 
@@ -157,7 +158,7 @@ def quote_header(ticker: str) -> None:
     delta = None
     if current.change is not None:
         delta = f"{current.change:+.2f} ({current.change_percent:+.2%})"
-    st.metric(f"{ticker} agora", f"{current.price:,.2f}", delta)
+    st.metric(f"{ticker} agora", f"{current.price:,.2f}", delta, help=HELP["quote"])
     updated = datetime.now(BRASILIA).strftime("%H:%M:%S")
     st.caption(f"Atualizado às {updated} (Brasília). Cotações do Yahoo podem ter atraso de até 15 minutos.")
 
@@ -187,55 +188,67 @@ def line(series: dict[str, pd.Series], y_title: str, percent: bool = False) -> g
     return figure
 
 
-def analysis_tabs(prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> None:
+def explain(tab, key: str, reading: str | None) -> None:
+    """Mostra, abaixo do gráfico, o que ele indica agora e como lê-lo."""
+    if reading:
+        tab.markdown(f"**Leitura atual:** {reading}")
+    tab.caption(f"**Como ler:** {HELP[key]}")
+
+
+def analysis_tabs(ticker: str, prices: pd.DataFrame, all_closes: dict[str, pd.Series]) -> None:
     close = prices["close"]
     tabs = st.tabs(
         ["Retorno acumulado", "Volatilidade", "Drawdown", "Médias móveis", "RSI e MACD", "Retornos mensais", "Correlação"]
     )
 
-    charts = [
-        line({"Retorno acumulado": indicators.cumulative_return(close)}, "%", percent=True),
-        line({"Volatilidade 21d (anualizada)": indicators.rolling_volatility(close)}, "%", percent=True),
-        line({"Drawdown": indicators.drawdown(close)}, "%", percent=True),
-        line(
-            {
-                "Fechamento": close,
-                "MM 21": indicators.moving_average(close, 21),
-                "MM 63": indicators.moving_average(close, 63),
-            },
-            "Preço",
-        ),
-    ]
-    for tab, chart in zip(tabs[:4], charts, strict=True):
-        tab.plotly_chart(chart, width="stretch")
+    cumulative = indicators.cumulative_return(close)
+    tabs[0].plotly_chart(line({"Retorno acumulado": cumulative}, "%", percent=True), width="stretch")
+    explain(tabs[0], "cumulative", explanations.read_cumulative(cumulative))
+
+    volatility = indicators.rolling_volatility(close)
+    tabs[1].plotly_chart(line({"Volatilidade 21d (anualizada)": volatility}, "%", percent=True), width="stretch")
+    explain(tabs[1], "volatility", explanations.read_volatility(volatility))
+
+    drawdown = indicators.drawdown(close)
+    tabs[2].plotly_chart(line({"Drawdown": drawdown}, "%", percent=True), width="stretch")
+    explain(tabs[2], "drawdown", explanations.read_drawdown(drawdown))
+
+    short, long = indicators.moving_average(close, 21), indicators.moving_average(close, 63)
+    tabs[3].plotly_chart(line({"Fechamento": close, "MM 21": short, "MM 63": long}, "Preço"), width="stretch")
+    explain(tabs[3], "moving_averages", explanations.read_moving_averages(close, short, long))
 
     rsi = indicators.rsi(close)
     rsi_figure = line({"RSI 14": rsi}, "RSI")
     rsi_figure.add_hline(y=70, line_dash="dot", line_color=COLORS["down"])
     rsi_figure.add_hline(y=30, line_dash="dot", line_color=COLORS["up"])
     rsi_figure.update_yaxes(range=[0, 100])
-    macd = indicators.macd(close)
     tabs[4].plotly_chart(rsi_figure, width="stretch")
+    explain(tabs[4], "rsi", explanations.read_rsi(rsi))
+    macd = indicators.macd(close)
     tabs[4].plotly_chart(line({"MACD": macd["macd"], "Sinal": macd["signal"]}, "MACD"), width="stretch")
+    explain(tabs[4], "macd", explanations.read_macd(macd))
 
-    monthly = indicators.monthly_returns(close) * 100
+    monthly = indicators.monthly_returns(close)
     heatmap = px.imshow(
-        monthly, labels=dict(x="Mês", y="Ano", color="Retorno (%)"), x=[str(m) for m in monthly.columns],
+        monthly * 100, labels=dict(x="Mês", y="Ano", color="Retorno (%)"), x=explanations.MONTHS,
         y=[str(y) for y in monthly.index], color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
         text_auto=".1f", aspect="auto",
     )
     tabs[5].plotly_chart(heatmap, width="stretch")
+    explain(tabs[5], "monthly", explanations.read_monthly(monthly))
 
     available = {name: series for name, series in all_closes.items() if len(series) > 20}
     if len(available) < 2:
         tabs[6].info("Adicione pelo menos dois ativos para ver a correlação.")
+        tabs[6].caption(f"**Como ler:** {HELP['correlation']}")
     else:
         correlation = indicators.returns_correlation(available)
         tabs[6].plotly_chart(
             px.imshow(correlation, text_auto=".2f", color_continuous_scale="RdBu", zmin=-1, zmax=1, aspect="auto"),
             width="stretch",
         )
-        tabs[6].caption("Correlação dos retornos diários nas datas em comum de todo o histórico salvo.")
+        explain(tabs[6], "correlation", explanations.read_correlation(correlation, ticker))
+        tabs[6].caption("Calculada com os retornos diários nas datas em comum de todo o histórico salvo.")
 
 
 def main() -> None:
@@ -267,8 +280,9 @@ def main() -> None:
         st.warning("Ainda não há histórico suficiente para este ativo.")
         return
     st.plotly_chart(price_chart(prices), width="stretch")
+    st.caption(f"**Como ler:** {HELP['candles']}")
     st.subheader("Análises")
-    analysis_tabs(prices, all_closes)
+    analysis_tabs(selected, prices, all_closes)
     st.caption("Dados: Yahoo Finance, via yfinance. Valores com atraso e sem garantia; não é recomendação de investimento.")
 
 
