@@ -25,11 +25,11 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
   ativos de preços diferentes).
 - **Tendência do dia:** para o ativo selecionado, mostra se o dia caminha para fechar em alta, em baixa ou
   estável (variação contra o fechamento anterior, conforme o horário da B3 ou da bolsa americana).
-- **Cotação ao vivo:** a cotação e o status do pregão se atualizam sozinhos a cada minuto, sem recarregar
+- **Cotação ao vivo:** a cotação e o status dos pregões se atualizam sozinhos a cada minuto, sem recarregar
   os gráficos.
 - **Explicações:** todo card tem um ícone de ajuda, e cada gráfico mostra uma leitura do momento com os números
   do ativo (por exemplo, o drawdown máximo e quando ocorreu) e um parágrafo de como interpretar o indicador.
-- **Pregão americano:** indica se a NYSE/Nasdaq está aberta e quanto falta para abrir ou fechar.
+- **Pregões:** mostra lado a lado se a B3 e a bolsa americana estão abertas e quanto falta para abrir ou fechar.
 
 ## Arquitetura
 

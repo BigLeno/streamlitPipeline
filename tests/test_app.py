@@ -45,7 +45,10 @@ class AppTest(unittest.TestCase):
         self.assertEqual(app.title[0].value, "💹 Dashboard Financeiro")
         self.assertEqual(app.sidebar.selectbox[0].options, ["AAA", "BBB"])
         labels = [metric.label for metric in app.metric]
-        self.assertIn("Maior retorno em 12 meses", labels)
+        self.assertIn("Maior retorno 12m", labels)
+        banners = [element.value for element in [*app.success, *app.info]]
+        self.assertTrue(any("B3" in text for text in banners))
+        self.assertTrue(any("Bolsa americana" in text for text in banners))
         self.assertIn("AAA agora", labels)
         self.assertTrue(all(metric.help for metric in app.metric), "todo card deve ter texto de ajuda")
         readings = [md.value for md in app.markdown if md.value.startswith("**Leitura atual:**")]

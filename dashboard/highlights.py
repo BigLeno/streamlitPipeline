@@ -82,7 +82,7 @@ class DayTrend:
 
 
 def day_trend(change_percent: float | None, market_open: bool) -> DayTrend | None:
-    """Direção do dia pela variação contra o fechamento anterior.
+    """Direção do dia pela variação contra o fechamento anterior (rótulo curto para caber no card).
 
     Com o pregão aberto, indica para que lado o ativo caminha para fechar; com ele fechado,
     como foi o último fechamento. Não é previsão: só reflete a variação até o momento.
@@ -93,5 +93,5 @@ def day_trend(change_percent: float | None, market_open: bool) -> DayTrend | Non
         direction = "Estável"
     else:
         direction = "Alta" if change_percent > 0 else "Baixa"
-    title = "Tendência de fechamento" if market_open else "Último fechamento"
+    title = "Tendência do dia" if market_open else "Último fechamento"
     return DayTrend(title=title, direction=direction, change=float(change_percent))
