@@ -47,7 +47,7 @@ class HighlightsTest(unittest.TestCase):
 class DayTrendTest(unittest.TestCase):
     def test_open_market(self):
         trend = highlights.day_trend(0.012, market_open=True)
-        self.assertEqual((trend.title, trend.direction), ("Tendência de fechamento", "Alta"))
+        self.assertEqual((trend.title, trend.direction), ("Tendência do dia", "Alta"))
         self.assertEqual(highlights.day_trend(-0.02, market_open=True).direction, "Baixa")
 
     def test_closed_market(self):

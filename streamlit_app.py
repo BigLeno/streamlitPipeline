@@ -18,7 +18,7 @@ from plotly.subplots import make_subplots
 from dashboard import explanations, highlights, indicators
 from dashboard.explanations import HELP
 from dashboard.market_data import Quote, market_data_from_env, normalize_ticker
-from dashboard.market_hours import format_duration, market_for, market_status
+from dashboard.market_hours import B3, NYSE, format_duration, market_for, market_status
 from dashboard.storage import Portfolio
 from dashboard.sync import sync_history
 
@@ -31,6 +31,7 @@ DEFAULT_SELECTED = os.getenv("DEFAULT_SELECTED", "^BVSP")
 # Intervalo de atualização automática da cotação e do status do pregão.
 REFRESH_SECONDS = 60
 BRASILIA = ZoneInfo("America/Sao_Paulo")
+MARKETS = [(B3, "em Brasília"), (NYSE, "em Nova York")]
 COLORS = {"up": "#1a9850", "down": "#d73027", "line": "#1f4e79", "accent": "#e08214", "muted": "#8c8c8c"}
 
 
@@ -73,12 +74,16 @@ def closes(tickers: list[str]) -> dict[str, pd.Series]:
 
 @st.fragment(run_every=REFRESH_SECONDS)
 def market_banner() -> None:
-    status = market_status(datetime.now(timezone.utc))
-    when = status.local_time.strftime("%a %H:%M")
-    if status.is_open:
-        st.success(f"🟢 Bolsa americana aberta ({when} em Nova York). Fecha em {format_duration(status.time_to_change)}.")
-    else:
-        st.info(f"🔴 Bolsa americana fechada ({when} em Nova York). Abre em {format_duration(status.time_to_change)}.")
+    """Status da B3 e da bolsa americana, lado a lado."""
+    now = datetime.now(timezone.utc)
+    for column, (market, place) in zip(st.columns(2), MARKETS, strict=True):
+        status = market_status(now, market)
+        when = status.local_time.strftime("%H:%M")
+        remaining = format_duration(status.time_to_change)
+        if status.is_open:
+            column.success(f"🟢 **{market.name} aberta** · {when} {place} · fecha em {remaining}")
+        else:
+            column.info(f"🔴 **{market.name} fechada** · {when} {place} · abre em {remaining}")
 
 
 def sidebar(tickers: list[str]) -> tuple[str | None, str]:
@@ -118,9 +123,9 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
 def highlight_metrics(all_closes: dict[str, pd.Series], selected: str) -> None:
     today = date.today()
     cards = [
-        ("Maior retorno em 12 meses", highlights.best_return(all_closes, today), HELP["best_return"]),
-        ("Pior tendência em 3 meses (MM21)", highlights.worst_moving_average_trend(all_closes, today), HELP["worst_trend"]),
-        ("Maior tendência de alta (proj. 1 mês)", highlights.strongest_trend(all_closes, today), HELP["strongest_trend"]),
+        ("Maior retorno 12m", highlights.best_return(all_closes, today), HELP["best_return"]),
+        ("Pior tendência 3m", highlights.worst_moving_average_trend(all_closes, today), HELP["worst_trend"]),
+        ("Maior tendência de alta", highlights.strongest_trend(all_closes, today), HELP["strongest_trend"]),
     ]
     columns = st.columns(4)
     for column, (label, item, help_text) in zip(columns[:3], cards, strict=True):
