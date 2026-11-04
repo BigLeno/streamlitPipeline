@@ -9,9 +9,16 @@ concurrency:
   group: ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/bigleno/streamlitpipeline
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ["3.10", "3.12", "3.13"]
@@ -27,31 +34,97 @@ jobs:
       - name: Testes
         run: python -m unittest -v
 
-  screenshot:
-    runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: write
+  test-postgres:
+    name: test (PostgreSQL)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: dashboard
+          POSTGRES_USER: dashboard
+          POSTGRES_PASSWORD: dashboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dashboard -d dashboard"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt playwright && playwright install --with-deps chromium
-      - name: Captura de tela com dados sintéticos
+      - run: pip install -r requirements.txt
+      - name: Testes do banco em PostgreSQL
         env:
-          MARKET_DATA: fake
-          DEFAULT_TICKERS: DEMO3,EXMP4,FICT11,TEST
+          TEST_DATABASE_URL: postgresql+psycopg://dashboard:dashboard@localhost:5432/dashboard
+        run: python -m unittest -v tests.test_storage
+
+  docker:
+    name: docker (build, smoke test e captura)
+    runs-on: ubuntu-24.04
+    needs: [test, test-postgres]
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Lint do Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Subir o container com dados sintéticos
         run: |
-          streamlit run streamlit_app.py --server.port 8501 &
+          docker run -d --name dashboard -p 8501:8501 \
+            -e MARKET_DATA=fake -e DEFAULT_TICKERS=DEMO3,EXMP4,FICT11,TEST \
+            ${{ env.IMAGE }}:ci
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' dashboard)
+            echo "health: $status"
+            [ "$status" = healthy ] && exit 0
+            sleep 5
+          done
+          docker logs dashboard
+          exit 1
+
+      - name: Conferir o endpoint de saúde e o usuário do container
+        run: |
+          curl --fail --silent http://localhost:8501/_stcore/health
+          test "$(docker exec dashboard id -u)" != "0"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Captura de tela do container
+        run: |
+          pip install playwright && playwright install --with-deps chromium
           python scripts/screenshot.py http://localhost:8501 docs/dashboard.png
+
+      - name: Logs do container em caso de falha
+        if: failure()
+        run: docker logs dashboard
+
       - uses: actions/upload-artifact@v5
         with:
           name: screenshot
           path: docs/dashboard.png
+
       - name: Versionar a captura quando ainda não existe no repositório
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
@@ -64,3 +137,25 @@ jobs:
           git add docs/dashboard.png
           git commit -m "docs: adiciona captura de tela do dashboard"
           git push
+
+      - name: Login no GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar a imagem (latest e SHA do commit)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha

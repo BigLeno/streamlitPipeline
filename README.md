@@ -48,6 +48,24 @@ sintética.
 
 ## Como rodar
 
+### Com Docker (recomendado)
+
+```bash
+git clone https://github.com/BigLeno/streamlitPipeline.git
+cd streamlitPipeline
+docker compose up --build      # app + PostgreSQL em http://localhost:8501
+```
+
+O `docker-compose.yml` sobe o app e um PostgreSQL com healthcheck; o app só inicia depois que o banco
+está pronto. A imagem roda com usuário sem privilégios e tem healthcheck próprio. Também é publicada no
+GitHub Container Registry a cada merge na `main`:
+
+```bash
+docker run -p 8501:8501 ghcr.io/bigleno/streamlitpipeline:latest
+```
+
+### Sem Docker
+
 ```bash
 git clone https://github.com/BigLeno/streamlitPipeline.git
 cd streamlitPipeline
@@ -76,7 +94,16 @@ ruff check .
 python -m unittest -v
 ```
 
-A CI roda lint e testes em Python 3.10, 3.12 e 3.13 e gera a captura de tela acima com dados sintéticos.
+## CI/CD
+
+O workflow do GitHub Actions roda a cada pull request e a cada merge:
+
+| Etapa | O que faz |
+| --- | --- |
+| `test` | Lint (ruff) e testes em Python 3.10, 3.12 e 3.13 |
+| `test (PostgreSQL)` | Testes do banco contra um PostgreSQL real, em container de serviço |
+| `docker` | Lint do Dockerfile (hadolint), build com cache, sobe o container e espera o healthcheck, confere que não roda como root e gera a captura de tela a partir dele |
+| publicação | Na `main`, envia a imagem ao GitHub Container Registry com as tags `latest` e `sha-<commit>` |
 
 ## Limitações
 

@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import unittest
 from datetime import date
 
@@ -7,17 +8,21 @@ import pandas as pd
 from dashboard.market_data import FakeMarketData
 
 HAS_SQLALCHEMY = importlib.util.find_spec("sqlalchemy") is not None
+# Na CI, os mesmos testes rodam também contra um PostgreSQL real.
+DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
 
 
 @unittest.skipUnless(HAS_SQLALCHEMY, "SQLAlchemy não instalado")
 class PortfolioTest(unittest.TestCase):
     def setUp(self):
-        from dashboard.storage import Portfolio
+        from dashboard.storage import Base, Portfolio
 
-        self.portfolio = Portfolio("sqlite:///:memory:")
+        self.portfolio = Portfolio(DATABASE_URL)
+        self.base = Base
         self.prices = FakeMarketData(today=date(2026, 11, 4)).history("ABC", date(2026, 10, 1))
 
     def tearDown(self):
+        self.base.metadata.drop_all(self.portfolio.engine)
         self.portfolio.close()
 
     def test_add_list_and_remove(self):
