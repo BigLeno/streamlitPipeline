@@ -1,4 +1,4 @@
-"""Horário do pregão regular da bolsa americana (NYSE/Nasdaq)."""
+"""Horário do pregão regular da bolsa americana (NYSE/Nasdaq) e da B3. Feriados não são considerados."""
 
 from __future__ import annotations
 
@@ -7,8 +7,36 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 NEW_YORK = ZoneInfo("America/New_York")
-OPEN = time(9, 30)
-CLOSE = time(16, 0)
+SAO_PAULO = ZoneInfo("America/Sao_Paulo")
+
+
+@dataclass(frozen=True)
+class Market:
+    name: str
+    timezone: ZoneInfo
+    open: time
+    close: time
+
+    def close_on(self, day: datetime) -> time:
+        return self.close
+
+
+class B3Market(Market):
+    """A B3 acompanha o horário de verão americano: fecha às 17h quando ele vigora e às 18h fora dele."""
+
+    def close_on(self, day: datetime) -> time:
+        noon_new_york = day.astimezone(NEW_YORK).replace(hour=12, minute=0)
+        return time(17, 0) if noon_new_york.dst() else time(18, 0)
+
+
+NYSE = Market("Bolsa americana", NEW_YORK, time(9, 30), time(16, 0))
+B3 = B3Market("B3", SAO_PAULO, time(10, 0), time(17, 0))
+
+
+def market_for(ticker: str) -> Market:
+    """B3 para ações brasileiras (.SA) e para o Ibovespa; bolsa americana para o resto."""
+    ticker = ticker.upper()
+    return B3 if ticker.endswith(".SA") or ticker == "^BVSP" else NYSE
 
 
 @dataclass(frozen=True)
@@ -22,19 +50,20 @@ class MarketStatus:
         return self.next_change - self.local_time
 
 
-def market_status(now: datetime) -> MarketStatus:
-    """Estado do pregão no instante `now` (com fuso). Feriados não são considerados."""
+def market_status(now: datetime, market: Market = NYSE) -> MarketStatus:
+    """Estado do pregão no instante `now` (com fuso)."""
     if now.tzinfo is None:
         raise ValueError("Informe um datetime com fuso horário.")
-    local = now.astimezone(NEW_YORK)
+    local = now.astimezone(market.timezone)
+    close = market.close_on(local)
     is_trading_day = local.weekday() < 5
-    is_open = is_trading_day and OPEN <= local.time() < CLOSE
+    is_open = is_trading_day and market.open <= local.time() < close
 
     if is_open:
-        next_change = local.replace(hour=CLOSE.hour, minute=CLOSE.minute, second=0, microsecond=0)
+        next_change = local.replace(hour=close.hour, minute=close.minute, second=0, microsecond=0)
     else:
-        next_change = local.replace(hour=OPEN.hour, minute=OPEN.minute, second=0, microsecond=0)
-        if not is_trading_day or local.time() >= CLOSE:
+        next_change = local.replace(hour=market.open.hour, minute=market.open.minute, second=0, microsecond=0)
+        if not is_trading_day or local.time() >= close:
             next_change += timedelta(days=1)
         while next_change.weekday() >= 5:
             next_change += timedelta(days=1)

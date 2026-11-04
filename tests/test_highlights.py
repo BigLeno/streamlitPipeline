@@ -44,5 +44,23 @@ class HighlightsTest(unittest.TestCase):
         self.assertIsNone(highlights.best_return({}, TODAY))
 
 
+class DayTrendTest(unittest.TestCase):
+    def test_open_market(self):
+        trend = highlights.day_trend(0.012, market_open=True)
+        self.assertEqual((trend.title, trend.direction), ("Tendência de fechamento", "Alta"))
+        self.assertEqual(highlights.day_trend(-0.02, market_open=True).direction, "Baixa")
+
+    def test_closed_market(self):
+        trend = highlights.day_trend(-0.005, market_open=False)
+        self.assertEqual((trend.title, trend.direction), ("Último fechamento", "Baixa"))
+
+    def test_small_change_is_stable(self):
+        self.assertEqual(highlights.day_trend(0.0004, market_open=True).direction, "Estável")
+        self.assertEqual(highlights.day_trend(-0.0009, market_open=False).direction, "Estável")
+
+    def test_without_quote(self):
+        self.assertIsNone(highlights.day_trend(None, market_open=True))
+
+
 if __name__ == "__main__":
     unittest.main()

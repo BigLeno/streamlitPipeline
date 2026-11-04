@@ -23,6 +23,8 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 - **Destaques da carteira:** maior retorno em 12 meses, pior tendência em 3 meses pela média móvel de 21
   dias e maior tendência de alta, projetada a partir de uma regressão no log do preço (comparável entre
   ativos de preços diferentes).
+- **Tendência do dia:** para o ativo selecionado, mostra se o dia caminha para fechar em alta, em baixa ou
+  estável (variação contra o fechamento anterior, conforme o horário da B3 ou da bolsa americana).
 - **Cotação ao vivo:** a cotação e o status do pregão se atualizam sozinhos a cada minuto, sem recarregar
   os gráficos.
 - **Pregão americano:** indica se a NYSE/Nasdaq está aberta e quanto falta para abrir ou fechar.

@@ -22,6 +22,11 @@ class AppTest(unittest.TestCase):
         }
         self.env = mock.patch.dict(os.environ, env)
         self.env.start()
+        # O Streamlit guarda caches no processo; sem limpar, um teste herda a carteira do anterior.
+        import streamlit as st
+
+        st.cache_resource.clear()
+        st.cache_data.clear()
 
     def tearDown(self):
         self.env.stop()
@@ -42,6 +47,8 @@ class AppTest(unittest.TestCase):
         labels = [metric.label for metric in app.metric]
         self.assertIn("Maior retorno em 12 meses", labels)
         self.assertIn("AAA agora", labels)
+        trend = next(metric for metric in app.metric if metric.label.endswith("(AAA)"))
+        self.assertIn(trend.value, {"Alta", "Baixa", "Estável"})
         self.assertTrue(any("Atualizado às" in caption.value for caption in app.caption))
 
     def test_ibovespa_is_selected_by_default(self):

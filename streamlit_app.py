@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 
 from dashboard import highlights, indicators
 from dashboard.market_data import Quote, market_data_from_env, normalize_ticker
-from dashboard.market_hours import format_duration, market_status
+from dashboard.market_hours import format_duration, market_for, market_status
 from dashboard.storage import Portfolio
 from dashboard.sync import sync_history
 
@@ -107,18 +107,43 @@ def sidebar(tickers: list[str]) -> tuple[str | None, str]:
     return selected, period
 
 
-def highlight_metrics(all_closes: dict[str, pd.Series]) -> None:
+def highlight_metrics(all_closes: dict[str, pd.Series], selected: str) -> None:
     today = date.today()
     cards = [
         ("Maior retorno em 12 meses", highlights.best_return(all_closes, today), "{:+.1%}"),
         ("Pior tendência em 3 meses (MM21)", highlights.worst_moving_average_trend(all_closes, today), "{:+.1%}"),
         ("Maior tendência de alta (proj. 1 mês)", highlights.strongest_trend(all_closes, today), "{:+.1%}"),
     ]
-    for column, (label, item, fmt) in zip(st.columns(3), cards, strict=True):
+    columns = st.columns(4)
+    for column, (label, item, fmt) in zip(columns[:3], cards, strict=True):
         if item is None:
             column.metric(label, "-")
         else:
             column.metric(label, item.ticker, fmt.format(item.value))
+    with columns[3]:
+        day_trend_card(selected)
+
+
+@st.fragment(run_every=REFRESH_SECONDS)
+def day_trend_card(ticker: str) -> None:
+    """Direção do ativo selecionado no dia; atualiza junto com a cotação."""
+    market = market_for(ticker)
+    status = market_status(datetime.now(timezone.utc), market)
+    current = quote(ticker)
+    trend = highlights.day_trend(current.change_percent if current else None, status.is_open)
+    if trend is None:
+        st.metric(f"Tendência do dia ({ticker})", "-")
+        return
+    st.metric(
+        f"{trend.title} ({ticker})",
+        trend.direction,
+        f"{trend.change:+.2%} no dia",
+        delta_color="off" if trend.direction == "Estável" else "normal",
+        help=(
+            f"Variação contra o fechamento anterior. {market.name} "
+            f"{'aberta' if status.is_open else 'fechada'} agora. Indica a direção até o momento, não é previsão."
+        ),
+    )
 
 
 @st.fragment(run_every=REFRESH_SECONDS)
@@ -231,7 +256,7 @@ def main() -> None:
 
     all_closes = closes(tickers)
     st.subheader("Destaques da carteira")
-    highlight_metrics(all_closes)
+    highlight_metrics(all_closes, selected)
     st.divider()
 
     prices = portfolio.prices(selected)
