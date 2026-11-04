@@ -3,10 +3,16 @@
 [![CI](https://github.com/BigLeno/streamlitPipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/BigLeno/streamlitPipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+
+[![Abrir no Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://dashboard-financeiro-bigleno.streamlit.app)
 
 Dashboard em Streamlit para acompanhar uma carteira de ações brasileiras e americanas: cotação,
 gráfico de candles, indicadores técnicos, retornos mensais, correlação entre ativos e destaques da
 carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
+
+**Demo:** [dashboard-financeiro-bigleno.streamlit.app](https://dashboard-financeiro-bigleno.streamlit.app)
+(no plano gratuito, o app "dorme" sem visitas e leva alguns segundos para acordar).
 
 ![Dashboard com dados sintéticos](docs/dashboard.png)
 
@@ -14,8 +20,9 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 
 ## Funcionalidades
 
-- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...). Apelidos comuns como `IBOV` e `SP500` são convertidos para o código do Yahoo. O ticker é validado
-  antes de entrar na carteira.
+- **Carteira:** adicione e remova tickers do Yahoo Finance (`PETR4.SA`, `AAPL`, índices como `^BVSP`...).
+  Apelidos como `IBOV` e `SP500` são convertidos para o código do Yahoo, e o ticker é validado antes de
+  entrar na carteira. O app abre com o Ibovespa selecionado.
 - **Histórico incremental:** na primeira vez baixa 5 anos; depois, só os dias que faltam, com alguns dias de
   sobreposição para pegar correções da fonte. Rodar de novo não duplica linhas.
 - **Gráficos:** candles com volume, retorno acumulado, volatilidade anualizada, drawdown, médias móveis,
@@ -36,12 +43,17 @@ carteira. O histórico fica salvo em banco e é atualizado de forma incremental.
 ```
 streamlit_app.py        # interface (Streamlit + Plotly)
 dashboard/
-├── market_data.py      # Yahoo Finance via yfinance e uma fonte sintética para demo e testes
-├── storage.py          # carteira e histórico com SQLAlchemy (SQLite por padrão)
+├── market_data.py      # Yahoo Finance via yfinance, apelidos de tickers e fonte sintética para demo e testes
+├── storage.py          # carteira e histórico com SQLAlchemy (SQLite ou PostgreSQL)
 ├── sync.py             # atualização incremental do histórico
 ├── indicators.py       # indicadores técnicos (funções puras sobre séries do pandas)
-├── highlights.py       # destaques da carteira
-└── market_hours.py     # horário do pregão americano
+├── highlights.py       # destaques da carteira e tendência do dia
+├── explanations.py     # textos de ajuda e leitura de cada análise
+└── market_hours.py     # horário de pregão da B3 e da bolsa americana
+tests/                  # testes unitários e teste do app inteiro (AppTest)
+Dockerfile              # imagem slim, usuário sem privilégios e healthcheck
+docker-compose.yml      # app + PostgreSQL
+.github/workflows/      # CI/CD: lint, testes, Docker e publicação no GHCR
 ```
 
 Os cálculos não dependem da interface, da rede nem do banco, então são testados isoladamente com
