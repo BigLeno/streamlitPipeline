@@ -68,3 +68,30 @@ def _pick(results: dict[str, float], choose) -> Highlight | None:
         return None
     ticker = choose(results, key=results.get)
     return Highlight(ticker=ticker, value=float(results[ticker]))
+
+
+# Variação abaixo disso (0,1%) é tratada como estável.
+STABLE_THRESHOLD = 0.001
+
+
+@dataclass(frozen=True)
+class DayTrend:
+    title: str
+    direction: str  # "Alta", "Baixa" ou "Estável"
+    change: float
+
+
+def day_trend(change_percent: float | None, market_open: bool) -> DayTrend | None:
+    """Direção do dia pela variação contra o fechamento anterior.
+
+    Com o pregão aberto, indica para que lado o ativo caminha para fechar; com ele fechado,
+    como foi o último fechamento. Não é previsão: só reflete a variação até o momento.
+    """
+    if change_percent is None:
+        return None
+    if abs(change_percent) < STABLE_THRESHOLD:
+        direction = "Estável"
+    else:
+        direction = "Alta" if change_percent > 0 else "Baixa"
+    title = "Tendência de fechamento" if market_open else "Último fechamento"
+    return DayTrend(title=title, direction=direction, change=float(change_percent))

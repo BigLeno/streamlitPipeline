@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from dashboard.market_hours import format_duration, market_status
+from dashboard.market_hours import B3, NYSE, format_duration, market_for, market_status
 
 NY = ZoneInfo("America/New_York")
 
@@ -37,6 +37,30 @@ class MarketHoursTest(unittest.TestCase):
     def test_requires_timezone(self):
         with self.assertRaises(ValueError):
             market_status(datetime(2026, 11, 4, 12, 0))
+
+    def test_market_for_ticker(self):
+        self.assertIs(market_for("PETR4.SA"), B3)
+        self.assertIs(market_for("^bvsp"), B3)
+        self.assertIs(market_for("AAPL"), NYSE)
+        self.assertIs(market_for("^GSPC"), NYSE)
+
+    def test_b3_closes_at_18h_without_us_daylight_saving(self):
+        sp = ZoneInfo("America/Sao_Paulo")
+        self.assertTrue(market_status(datetime(2026, 11, 4, 17, 30, tzinfo=sp), B3).is_open)  # novembro
+        self.assertFalse(market_status(datetime(2026, 11, 4, 18, 0, tzinfo=sp), B3).is_open)
+
+    def test_b3_closes_at_17h_with_us_daylight_saving(self):
+        sp = ZoneInfo("America/Sao_Paulo")
+        status = market_status(datetime(2026, 7, 15, 16, 0, tzinfo=sp), B3)  # julho
+        self.assertTrue(status.is_open)
+        self.assertEqual(status.next_change, datetime(2026, 7, 15, 17, 0, tzinfo=sp))
+        self.assertFalse(market_status(datetime(2026, 7, 15, 17, 30, tzinfo=sp), B3).is_open)
+
+    def test_b3_before_open(self):
+        sp = ZoneInfo("America/Sao_Paulo")
+        status = market_status(datetime(2026, 11, 4, 9, 0, tzinfo=sp), B3)
+        self.assertFalse(status.is_open)
+        self.assertEqual(status.next_change, datetime(2026, 11, 4, 10, 0, tzinfo=sp))
 
     def test_format_duration(self):
         self.assertEqual(format_duration(timedelta(hours=2, minutes=5)), "2h 5min")
