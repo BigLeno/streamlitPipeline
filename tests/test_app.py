@@ -22,6 +22,11 @@ class AppTest(unittest.TestCase):
         }
         self.env = mock.patch.dict(os.environ, env)
         self.env.start()
+        # O Streamlit guarda caches no processo; sem limpar, um teste herda a carteira do anterior.
+        import streamlit as st
+
+        st.cache_resource.clear()
+        st.cache_data.clear()
 
     def tearDown(self):
         self.env.stop()
